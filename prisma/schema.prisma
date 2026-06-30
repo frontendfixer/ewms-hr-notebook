@@ -1,0 +1,289 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ─── Better Auth ───────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  accounts      Account[]
+  profile       UserProfile?
+  settings      UserSetting[]
+  holidays      PublicHoliday[]
+  workEvents    WorkEvent[]
+  ledgerEntries LedgerEntry[]
+  attachments   Attachment[]
+  notifications Notification[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ─── Profile & Settings ────────────────────────────────────────
+
+model UserProfile {
+  id           String           @id @default(cuid())
+  userId       String           @unique
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personnelNo  String?
+  designation  String?
+  department   String?
+  category     EmployeeCategory @default(GROUP_C)
+  joinDate     DateTime?
+  onboardingDone Boolean        @default(false)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@map("user_profile")
+}
+
+model UserSetting {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key                   String
+  value                 String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@map("user_setting")
+}
+
+model PublicHoliday {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("public_holiday")
+}
+
+// ─── Event Stream & Ledger ─────────────────────────────────────
+
+model WorkEvent {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventType       WorkEventType
+  domain          EventDomain
+  occurredAt      DateTime
+  recordedAt      DateTime      @default(now())
+  title           String
+  remarks         String?       @db.Text
+  payload         Json
+  correlationId   String?
+  parentEventId   String?
+  parentEvent     WorkEvent?    @relation("EventChain", fields: [parentEventId], references: [id], onDelete: SetNull)
+  childEvents     WorkEvent[]   @relation("EventChain")
+  voidedAt        DateTime?
+  voidingEventId  String?
+  ledgerEntries   LedgerEntry[]
+  attachments     Attachment[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([userId, occurredAt])
+  @@index([userId, domain, occurredAt])
+  @@index([userId, eventType])
+  @@index([userId, correlationId])
+  @@map("work_event")
+}
+
+model LedgerEntry {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId       String
+  event         WorkEvent     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  account       LedgerAccount
+  subAccountKey String?
+  amount        Decimal       @db.Decimal(10, 2)
+  occurredAt    DateTime
+  expiresAt     DateTime?
+  metadata      Json?
+  createdAt     DateTime      @default(now())
+
+  @@index([userId, account, occurredAt])
+  @@index([userId, account, subAccountKey])
+  @@index([userId, expiresAt])
+  @@map("ledger_entry")
+}
+
+model Attachment {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String
+  event     WorkEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  fileName  String
+  mimeType  String
+  size      Int
+  path      String
+  createdAt DateTime  @default(now())
+
+  @@index([userId, eventId])
+  @@map("attachment")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String?
+  read      Boolean          @default(false)
+  actionUrl String?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+  @@map("notification")
+}
+
+// ─── Enums ─────────────────────────────────────────────────────
+
+enum WorkEventType {
+  HOLIDAY_WORK_RECORDED
+  CR_CREDIT_ISSUED
+  CR_CONSUMED
+  CR_EXPIRED
+  LEAVE_RECORDED
+  LEAVE_LEDGER_ADJUSTMENT
+  LEAVE_CONVERSION
+  NIGHT_DUTY_RECORDED
+  TRAVEL_RECORDED
+  BILL_SUBMITTED
+  CLAIM_PASSED
+  PAYMENT_RECEIVED
+  STATUS_CHANGED
+  ATTACHMENT_LINKED
+  NOTE_AMENDED
+  EVENT_VOIDED
+}
+
+enum EventDomain {
+  CR
+  LEAVE
+  NIGHT_DUTY
+  TRAVEL
+  META
+}
+
+enum LedgerAccount {
+  CR_CREDIT
+  LEAVE_CL
+  LEAVE_LAP
+  LEAVE_LHAP
+  LEAVE_COMMUTED
+  LEAVE_SPECIAL_CL
+}
+
+enum EmployeeCategory {
+  GROUP_C
+  GROUP_D
+  SUPERVISORY
+  OTHER
+}
+
+enum NotificationType {
+  CR_EXPIRY
+  PENDING_BILL
+  PENDING_PAYMENT
+  SYSTEM
+}
+
+enum ClaimStatus {
+  DRAFT
+  BILL_SUBMITTED
+  PASSED
+  PAID
+  VOIDED
+}
+
+enum LeaveType {
+  LAP
+  LHAP
+  COMMUTED
+  LND
+  EOL
+  STUDY
+  WRIIL
+  PATERNITY
+  MATERNITY
+  CCL
+  CHILD_ADOPTION
+  CL
+  SPECIAL_CL
+  JOINING_TIME
+}
+
+enum LeaveDuration {
+  FULL
+  FIRST_HALF
+  SECOND_HALF
+}
