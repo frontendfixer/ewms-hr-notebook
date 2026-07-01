@@ -7,11 +7,6 @@ import { prisma } from "@/lib/db";
 
 export default async function HomePage() {
   const userId = await requireUserId();
-  const profile = await prisma.userProfile.findUnique({ where: { userId } });
-  if (!profile?.onboardingDone) {
-    const { redirect } = await import("next/navigation");
-    redirect("/onboarding");
-  }
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   const [balances, feed, insights] = await Promise.all([

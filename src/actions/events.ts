@@ -200,6 +200,8 @@ export async function completeOnboarding(formData: FormData) {
   }, INTERACTIVE_TX_OPTIONS);
 
   revalidatePath("/");
+  revalidatePath("/home");
+  revalidatePath("/onboarding");
 }
 
 export async function addHoliday(formData: FormData) {

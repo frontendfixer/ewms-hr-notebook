@@ -12,6 +12,7 @@ import {
   Train,
   User,
 } from "lucide-react";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DOMAIN_STYLES } from "@/lib/design-tokens";
 import type { EventDomain } from "@/generated/prisma/client";
@@ -85,6 +86,7 @@ export default async function MorePage() {
         {accountLinks.map((item) => (
           <NavRow key={item.href} {...item} />
         ))}
+        <SignOutButton variant="row" />
       </section>
 
       <section className="space-y-2">

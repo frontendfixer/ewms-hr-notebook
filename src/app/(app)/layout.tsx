@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth-server";
+import { ensureProfile, getSession } from "@/lib/auth-server";
 import { AppSidebar, BottomNav } from "@/components/shell/app-nav";
 import { QuickAddFab } from "@/components/shell/quick-add-fab";
 import { CommandPalette } from "@/components/shell/command-palette";
@@ -12,6 +12,11 @@ export default async function AppLayout({
   const session = await getSession();
   if (!session?.user) {
     redirect("/login");
+  }
+
+  const profile = await ensureProfile(session.user.id);
+  if (!profile.onboardingDone) {
+    redirect("/onboarding");
   }
 
   return (
