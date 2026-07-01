@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { Label, Textarea } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { formatLocalDateValue } from "@/lib/date-values";
 import { recordHolidayWork } from "@/actions/events";

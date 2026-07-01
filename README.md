@@ -4,6 +4,7 @@ Personal Indian Railways HR notebook with an event-first, ledger-first architect
 
 ## Stack
 
+- **Runtime:** Bun 1.3, Node.js ≥24
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS v4
 - **Data:** Prisma 7 + MySQL (MariaDB adapter)
 - **Auth:** Better Auth (Google OAuth)
@@ -17,9 +18,9 @@ cp .env.example .env
 # Fill in GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
 
 docker compose up -d
-npm install
-npx prisma db push   # or: npx prisma migrate dev
-npm run dev
+bun install
+bun run db:push      # or: bun run db:migrate
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Sign in with Google, complete onboarding, then land on the Home feed.
@@ -123,13 +124,13 @@ docs/                     # PRD, UX spec, event taxonomy, design tokens
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Development server |
-| `npm run build` | Production build (webpack) |
-| `npm run start` | Production server |
-| `npm run lint` | ESLint |
-| `npm run test` | Vitest unit tests |
-| `npm run db:migrate` | `prisma migrate dev` |
-| `npm run db:push` | `prisma db push` |
+| `bun run dev` | Development server |
+| `bun run build` | Production build (webpack) |
+| `bun run start` | Production server |
+| `bun run lint` | ESLint |
+| `bun run test` | Vitest unit tests |
+| `bun run db:migrate` | `prisma migrate dev` |
+| `bun run db:push` | `prisma db push` |
 
 ## PWA
 

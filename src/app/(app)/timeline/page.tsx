@@ -1,13 +1,11 @@
 import { requireUserId } from "@/lib/auth-server";
 import { eventService } from "@/lib/services/event-service";
-import { EventDomain } from "@/generated/prisma/client";
 import { EventCard } from "@/components/timeline/event-card";
 import {
   TimelineDomainChips,
   TimelinePeriodFilters,
 } from "@/components/filters/filter-chips";
 import { Suspense } from "react";
-import { EventCardSkeleton } from "@/components/timeline/event-card";
 import { format } from "date-fns";
 import { domainFromFilter, getFilterDates } from "@/lib/event-filters";
 

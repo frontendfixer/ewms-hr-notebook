@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   Calendar,
   Home,
-  List,
   MoreHorizontal,
   Wallet,
   Clock,
