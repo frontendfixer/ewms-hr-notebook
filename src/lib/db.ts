@@ -21,7 +21,17 @@ function createAdapter() {
   });
 }
 
+/** Default interactive tx timeout is 5s; remote MariaDB often needs more headroom. */
+export const INTERACTIVE_TX_OPTIONS = {
+  maxWait: 10_000,
+  timeout: 20_000,
+} as const;
+
 export const prisma =
-  globalForPrisma.prisma ?? new PrismaClient({ adapter: createAdapter() });
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    adapter: createAdapter(),
+    transactionOptions: INTERACTIVE_TX_OPTIONS,
+  });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

@@ -1,5 +1,12 @@
-import { ClaimStatus, LedgerAccount, WorkEventType } from "@/generated/prisma/client";
+import {
+  ClaimStatus,
+  LedgerAccount,
+  Prisma,
+  WorkEventType,
+} from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+
+type LedgerDb = Prisma.TransactionClient | typeof prisma;
 import { claimStatusService } from "@/lib/services/claim-status-service";
 
 export const ledgerService = {
@@ -16,9 +23,9 @@ export const ledgerService = {
     return map;
   },
 
-  async getAvailableCrCredits(userId: string) {
+  async getAvailableCrCredits(userId: string, db: LedgerDb = prisma) {
     const now = new Date();
-    const credits = await prisma.ledgerEntry.groupBy({
+    const credits = await db.ledgerEntry.groupBy({
       by: ["subAccountKey"],
       where: {
         userId,
