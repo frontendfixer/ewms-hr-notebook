@@ -17,12 +17,20 @@ export function CommandPalette() {
         e.preventDefault();
         setOpen((o) => !o);
       }
-      if (e.key === "/" && !open && document.activeElement?.tagName !== "INPUT") {
+      if (
+        e.key === "/" &&
+        !open &&
+        document.activeElement?.tagName !== "INPUT"
+      ) {
         e.preventDefault();
         setOpen(true);
       }
       if (e.key === "Escape") setOpen(false);
-      if (e.key === "n" && !open && document.activeElement?.tagName !== "INPUT") {
+      if (
+        e.key === "n" &&
+        !open &&
+        document.activeElement?.tagName !== "INPUT"
+      ) {
         // handled by FAB focus - skip
       }
     },
@@ -42,7 +50,8 @@ export function CommandPalette() {
       setQuery("");
     }, 400);
     return () => clearTimeout(t);
-  }, [query, open, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, open]);
 
   return (
     <>

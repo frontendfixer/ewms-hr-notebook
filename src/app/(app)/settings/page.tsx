@@ -4,6 +4,7 @@ import { getUserSetting } from "@/lib/user-settings";
 import { DEFAULT_CR_EXPIRY_DAYS, SETTING_KEYS } from "@/lib/design-tokens";
 import { PaySettingsForm } from "@/components/settings/pay-settings-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function SettingsPage() {
@@ -38,6 +39,17 @@ export default async function SettingsPage() {
         taBaseAmount={pay.taBaseAmount}
         crExpiryDays={crExpiry || DEFAULT_CR_EXPIRY_DAYS}
       />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Account</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Sign out of your account on this device.
+          </p>
+          <SignOutButton fullWidth />
+        </CardContent>
+      </Card>
     </div>
   );
 }
