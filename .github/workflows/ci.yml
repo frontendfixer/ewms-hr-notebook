@@ -20,6 +20,7 @@ jobs:
       - run: npm run lint
       - run: npm run build
         env:
-          DATABASE_URL: mysql://user:pass@localhost:3306/test
+          DATABASE_URL: postgresql://user:pass@localhost:5432/test
+          DIRECT_URL: postgresql://user:pass@localhost:5432/test
           BETTER_AUTH_SECRET: ci-secret-key-at-least-32-characters-long
           BETTER_AUTH_URL: http://localhost:3000

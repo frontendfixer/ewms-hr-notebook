@@ -5,7 +5,7 @@ Personal Indian Railways HR notebook with an event-first, ledger-first architect
 ## Stack
 
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS v4
-- **Data:** Prisma 7 + MySQL (MariaDB adapter)
+- **Data:** Prisma 7 + Neon Postgres (`@prisma/adapter-neon`)
 - **Auth:** Better Auth (Google OAuth)
 - **Forms & state:** React Hook Form, Zod, TanStack Query
 - **PWA:** `@ducanh2912/next-pwa` (enabled in production builds)
@@ -14,11 +14,11 @@ Personal Indian Railways HR notebook with an event-first, ledger-first architect
 
 ```bash
 cp .env.example .env
+# Set DATABASE_URL (Neon pooled) and DIRECT_URL (Neon direct) from the Neon console
 # Fill in GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
 
-docker compose up -d
 npm install
-npx prisma db push   # or: npx prisma migrate dev
+npx prisma migrate deploy   # or: npx prisma db push for prototyping
 npm run dev
 ```
 
@@ -28,7 +28,8 @@ Open [http://localhost:3000](http://localhost:3000). Sign in with Google, comple
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | MySQL connection string |
+| `DATABASE_URL` | Neon pooled Postgres connection string (app runtime) |
+| `DIRECT_URL` | Neon direct Postgres connection string (Prisma CLI migrations) |
 | `BETTER_AUTH_SECRET` | Session signing secret (≥32 chars) |
 | `BETTER_AUTH_URL` | App base URL (e.g. `http://localhost:3000`) |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |

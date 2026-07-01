@@ -1,15 +1,16 @@
+# Optional local Postgres for schema development without a Neon project.
+# Production and staging should use Neon connection strings from .env.
 services:
-  mysql:
-    image: mysql:8
+  postgres:
+    image: postgres:16
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: ewms
-      MYSQL_USER: ewms
-      MYSQL_PASSWORD: ewms
+      POSTGRES_DB: ewms
+      POSTGRES_USER: ewms
+      POSTGRES_PASSWORD: ewms
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - ewms_mysql:/var/lib/mysql
+      - ewms_postgres:/var/lib/postgresql/data
 
 volumes:
-  ewms_mysql:
+  ewms_postgres:
