@@ -11,6 +11,8 @@ function createAdapter() {
     throw new Error("DATABASE_URL is not set");
   }
   const parsed = new URL(url);
+  const allowPublicKeyRetrieval =
+    parsed.searchParams.get("allowPublicKeyRetrieval") !== "false";
   return new PrismaMariaDb({
     host: parsed.hostname,
     port: parsed.port ? Number(parsed.port) : 3306,
@@ -18,6 +20,7 @@ function createAdapter() {
     password: decodeURIComponent(parsed.password),
     database: parsed.pathname.replace(/^\//, ""),
     connectionLimit: 5,
+    allowPublicKeyRetrieval,
   });
 }
 
