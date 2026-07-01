@@ -22,14 +22,6 @@ const steps: ClaimStatus[] = [
   "PAID",
 ];
 
-const nextStatus: Record<ClaimStatus, ClaimStatus | null> = {
-  DRAFT: "BILL_SUBMITTED",
-  BILL_SUBMITTED: "PASSED",
-  PASSED: "PAID",
-  PAID: null,
-  VOIDED: null,
-};
-
 export function StatusTimeline({
   claimEventId,
   currentStatus,

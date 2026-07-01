@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select, Textarea } from "@/components/ui/input";
+import { Label, Select, Textarea } from "@/components/ui/input";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { recordLeave } from "@/actions/events";
 import { toast } from "sonner";

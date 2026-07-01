@@ -1,4 +1,4 @@
-import { EventDomain, WorkEventType } from "@/generated/prisma/client";
+import { WorkEventType } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { isSunday } from "@/lib/utils";
 import { format } from "date-fns";

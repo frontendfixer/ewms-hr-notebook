@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { DeleteEventButton } from "@/components/timeline/delete-event-button";
 import { formatCurrency } from "@/lib/utils";
 import type { FeedItem } from "@/lib/services/feed-service";
