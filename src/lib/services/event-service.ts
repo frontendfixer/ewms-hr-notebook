@@ -6,7 +6,7 @@ import {
   Prisma,
   WorkEventType,
 } from "@/generated/prisma/client";
-import { prisma } from "@/lib/db";
+import { INTERACTIVE_TX_OPTIONS, prisma } from "@/lib/db";
 import { DEFAULT_CR_EXPIRY_DAYS, SETTING_KEYS } from "@/lib/design-tokens";
 import { addDays, eachDayInclusive, formatDate, isSunday, startOfDay } from "@/lib/utils";
 import { calculateNdaPerNight, calculateTaAmount } from "@/lib/calculations/allowances";
@@ -130,7 +130,7 @@ export const eventService = {
       });
 
       return { hw, cr };
-    });
+    }, INTERACTIVE_TX_OPTIONS);
   },
 
   async recordLeave(userId: string, input: LeaveRecordInput) {
@@ -148,6 +148,11 @@ export const eventService = {
     }
 
     return prisma.$transaction(async (tx) => {
+      const availableCredits =
+        crIds.length > 0
+          ? await ledgerService.getAvailableCrCredits(userId, tx)
+          : [];
+
       const leave = await tx.workEvent.create({
         data: {
           userId,
@@ -185,8 +190,7 @@ export const eventService = {
       }
 
       for (const crId of crIds) {
-        const credit = await ledgerService.getAvailableCrCredits(userId);
-        const match = credit.find((c) => c.creditEventId === crId);
+        const match = availableCredits.find((c) => c.creditEventId === crId);
         if (!match || match.balance <= 0) {
           throw new Error("Selected CR credit is not available");
         }
@@ -217,7 +221,7 @@ export const eventService = {
       }
 
       return leave;
-    });
+    }, INTERACTIVE_TX_OPTIONS);
   },
 
   async recordNightDuty(userId: string, input: NightDutyInput) {
@@ -358,7 +362,7 @@ export const eventService = {
       });
 
       return statusEvent;
-    });
+    }, INTERACTIVE_TX_OPTIONS);
   },
 
   async voidEvent(userId: string, eventId: string, reason?: string) {
@@ -426,7 +430,7 @@ export const eventService = {
       };
 
       await voidOne(targetId);
-    });
+    }, INTERACTIVE_TX_OPTIONS);
   },
 
   async getEvents(

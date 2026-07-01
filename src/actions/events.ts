@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUserId, ensureProfile } from "@/lib/auth-server";
 import { eventService } from "@/lib/services/event-service";
-import { prisma } from "@/lib/db";
+import { INTERACTIVE_TX_OPTIONS, prisma } from "@/lib/db";
 import { LedgerAccount, WorkEventType, EventDomain } from "@/generated/prisma/client";
 import { SETTING_KEYS, DEFAULT_CR_EXPIRY_DAYS } from "@/lib/design-tokens";
 import {
@@ -197,7 +197,7 @@ export async function completeOnboarding(formData: FormData) {
         },
       ],
     });
-  });
+  }, INTERACTIVE_TX_OPTIONS);
 
   revalidatePath("/");
 }
