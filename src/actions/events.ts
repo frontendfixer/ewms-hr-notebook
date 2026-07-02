@@ -9,6 +9,7 @@ import { SETTING_KEYS, DEFAULT_CR_EXPIRY_DAYS } from "@/lib/design-tokens";
 import {
   holidayWorkSchema,
   leaveRecordSchema,
+  leaveBalanceAdjustSchema,
   nightDutySchema,
   travelSchema,
   statusTransitionSchema,
@@ -45,6 +46,22 @@ export async function recordLeave(formData: FormData) {
   });
   await eventService.recordLeave(userId, parsed);
   revalidatePath("/");
+  revalidatePath("/home");
+  revalidatePath("/leaves");
+}
+
+export async function adjustLeaveBalances(formData: FormData) {
+  const userId = await requireUserId();
+  const parsed = leaveBalanceAdjustSchema.parse({
+    clBalance: formData.get("clBalance"),
+    lapBalance: formData.get("lapBalance"),
+    lhapBalance: formData.get("lhapBalance"),
+    reason: formData.get("reason") || undefined,
+  });
+  await eventService.adjustLeaveBalances(userId, parsed);
+  revalidatePath("/");
+  revalidatePath("/home");
+  revalidatePath("/leaves");
 }
 
 export async function recordNightDuty(formData: FormData) {

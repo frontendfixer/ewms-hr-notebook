@@ -53,7 +53,7 @@ export const feedService = {
           title: `CR earned ${cr.earnedAt ? formatDate(cr.earnedAt) : ""} expires in ${daysLeft} days`,
           action: {
             label: "Use It",
-            href: `/add/leave?usesCr=1&cr=${cr.creditEventId}`,
+            href: `/add/leave?mode=cr&cr=${cr.creditEventId}`,
           },
         });
       }
