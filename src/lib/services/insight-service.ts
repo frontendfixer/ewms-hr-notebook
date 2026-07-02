@@ -1,7 +1,9 @@
-import { WorkEventType } from "@/generated/prisma/client";
+import { ClaimStatus, WorkEventType } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { isSunday } from "@/lib/utils";
 import { format } from "date-fns";
+import { claimStatusService } from "@/lib/services/claim-status-service";
+import { monthlyClaimService } from "@/lib/services/monthly-claim-service";
 
 export type MonthStats = {
   cr: number;
@@ -34,6 +36,7 @@ export const insightService = {
     const now = new Date();
     const yearStart = new Date(now.getFullYear(), 0, 1);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
     const events = await prisma.workEvent.findMany({
       where: {
@@ -62,7 +65,6 @@ export const insightService = {
 
     for (const e of events) {
       const inMonth = e.occurredAt >= monthStart;
-      const payload = e.payload as { amount?: number; currentStatus?: string };
 
       if (e.eventType === WorkEventType.HOLIDAY_WORK_RECORDED && isSunday(e.occurredAt)) {
         sundaysWorked++;
@@ -80,24 +82,50 @@ export const insightService = {
 
       if (e.eventType === WorkEventType.NIGHT_DUTY_RECORDED) {
         yearToDate.nightDuty++;
-        if (inMonth) {
-          thisMonth.nightDuty++;
-          if (payload.currentStatus !== "PAID" && payload.amount) {
-            thisMonth.pendingAmount += payload.amount;
-          }
-        }
+        if (inMonth) thisMonth.nightDuty++;
       }
 
       if (e.eventType === WorkEventType.TRAVEL_RECORDED) {
         yearToDate.travel++;
-        const p = e.payload as { to?: string; amount?: number; currentStatus?: string };
+        const p = e.payload as { to?: string };
         if (p.to) destinations[p.to] = (destinations[p.to] ?? 0) + 1;
-        if (inMonth) {
-          thisMonth.travel++;
-          if (p.currentStatus !== "PAID" && p.amount) {
-            thisMonth.pendingAmount += p.amount;
-          }
-        }
+        if (inMonth) thisMonth.travel++;
+      }
+    }
+
+    const monthSettlements = await prisma.workEvent.findMany({
+      where: {
+        userId,
+        eventType: WorkEventType.MONTHLY_CLAIM_SETTLEMENT,
+        voidedAt: null,
+        occurredAt: { gte: monthStart, lt: nextMonthStart },
+      },
+    });
+    for (const settlement of monthSettlements) {
+      const status = await claimStatusService.getStatus(settlement.id);
+      if (status !== ClaimStatus.PAID && status !== ClaimStatus.VOIDED) {
+        thisMonth.pendingAmount += await monthlyClaimService.getSettlementTotal(
+          settlement.id,
+        );
+      }
+    }
+
+    const orphanClaims = await prisma.workEvent.findMany({
+      where: {
+        userId,
+        eventType: {
+          in: [WorkEventType.NIGHT_DUTY_RECORDED, WorkEventType.TRAVEL_RECORDED],
+        },
+        parentEventId: null,
+        voidedAt: null,
+        occurredAt: { gte: monthStart, lt: nextMonthStart },
+      },
+    });
+    for (const claim of orphanClaims) {
+      const status = await claimStatusService.getStatus(claim.id);
+      const payload = claim.payload as { amount?: number };
+      if (status !== ClaimStatus.PAID && status !== ClaimStatus.VOIDED) {
+        thisMonth.pendingAmount += payload.amount ?? 0;
       }
     }
 

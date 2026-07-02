@@ -2,7 +2,7 @@
 builder = "RAILPACK"
 
 [deploy]
-startCommand = "bun run start"
+startCommand = "bun run start & bun run backfill:settlements"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"

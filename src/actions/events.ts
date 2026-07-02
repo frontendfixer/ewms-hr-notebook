@@ -74,6 +74,7 @@ export async function recordNightDuty(formData: FormData) {
   });
   const created = await eventService.recordNightDuty(userId, parsed);
   revalidatePath("/");
+  revalidatePath("/claims");
   return { count: created.length };
 }
 
@@ -89,6 +90,7 @@ export async function recordTravel(formData: FormData) {
   });
   await eventService.recordTravel(userId, parsed);
   revalidatePath("/");
+  revalidatePath("/claims");
 }
 
 export async function transitionClaimStatus(formData: FormData) {
@@ -104,6 +106,7 @@ export async function transitionClaimStatus(formData: FormData) {
   });
   await eventService.transitionClaimStatus(userId, parsed);
   revalidatePath("/");
+  revalidatePath("/claims");
 }
 
 export async function voidEvent(eventId: string, reason?: string) {

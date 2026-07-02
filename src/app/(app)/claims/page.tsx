@@ -1,34 +1,25 @@
 import { requireUserId } from "@/lib/auth-server";
-import { prisma } from "@/lib/db";
-import { WorkEventType, ClaimStatus } from "@/generated/prisma/client";
-import { claimStatusService } from "@/lib/services/claim-status-service";
-import { EventCard } from "@/components/timeline/event-card";
+import { ledgerService } from "@/lib/services/ledger-service";
+import { monthlyClaimService } from "@/lib/services/monthly-claim-service";
+import { ClaimYearStatsCard } from "@/components/claims/claim-year-stats-card";
+import { PassedAwaitingPaymentCard } from "@/components/claims/passed-awaiting-payment-card";
+import { MonthlyClaimCard } from "@/components/claims/monthly-claim-card";
 import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import { ClaimStatus } from "@/generated/prisma/client";
+import type { ClaimSettlementDomain } from "@/lib/services/monthly-claim-utils";
 
 export default async function ClaimsPage() {
   const userId = await requireUserId();
-  const claims = await prisma.workEvent.findMany({
-    where: {
-      userId,
-      voidedAt: null,
-      eventType: {
-        in: [WorkEventType.NIGHT_DUTY_RECORDED, WorkEventType.TRAVEL_RECORDED],
-      },
-    },
-    orderBy: { occurredAt: "desc" },
-  });
+  const [pendingTotal, pending, stats] = await Promise.all([
+    ledgerService.getPendingMoney(userId),
+    monthlyClaimService.listPendingSettlements(userId),
+    monthlyClaimService.getClaimPageStats(userId),
+  ]);
 
-  let pendingTotal = 0;
-  const pending = [];
-  for (const c of claims) {
-    const status = await claimStatusService.getStatus(c.id);
-    const amount = (c.payload as { amount?: number }).amount ?? 0;
-    if (status !== ClaimStatus.PAID && status !== ClaimStatus.VOIDED) {
-      pendingTotal += amount;
-      pending.push({ ...c, status });
-    }
-  }
+  const remainingPending = pending.filter(
+    (settlement) => settlement.status !== ClaimStatus.PASSED,
+  );
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -39,21 +30,23 @@ export default async function ClaimsPage() {
           <p className="text-2xl font-bold">{formatCurrency(pendingTotal)}</p>
         </CardContent>
       </Card>
+      <ClaimYearStatsCard stats={stats} />
+      <PassedAwaitingPaymentCard data={stats.passedAwaitingPayment} />
       <div className="space-y-2">
-        {pending.length === 0 ? (
+        {remainingPending.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">
-            All claims paid!
+            {pending.length === 0 ? "All claims paid!" : "No other pending settlements"}
           </p>
         ) : (
-          pending.map((e) => (
-            <EventCard
-              key={e.id}
-              id={e.id}
-              title={e.title}
-              domain={e.domain}
-              occurredAt={e.occurredAt}
-              payload={e.payload}
-              eventType={e.eventType}
+          remainingPending.map((settlement) => (
+            <MonthlyClaimCard
+              key={settlement.id}
+              id={settlement.id}
+              domain={settlement.domain as ClaimSettlementDomain}
+              title={settlement.title}
+              childCount={settlement.childCount}
+              total={settlement.total}
+              status={settlement.status}
             />
           ))
         )}

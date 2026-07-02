@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUserId } from "@/lib/auth-server";
 import { prisma } from "@/lib/db";
@@ -5,6 +6,7 @@ import { claimStatusService } from "@/lib/services/claim-status-service";
 import { StatusTimeline } from "@/components/status/status-timeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeleteEventButton } from "@/components/timeline/delete-event-button";
+import { claimStatusBadge } from "@/components/ui/badge";
 import { formatDate, cn } from "@/lib/utils";
 import { DOMAIN_LABELS } from "@/lib/design-tokens";
 import { domainCardClass, domainLabelClass } from "@/lib/domain-styles";
@@ -23,6 +25,7 @@ export default async function EventDetailPage({
     include: {
       childEvents: { where: { voidedAt: null }, orderBy: { recordedAt: "asc" } },
       ledgerEntries: true,
+      parentEvent: true,
     },
   });
 
@@ -32,9 +35,20 @@ export default async function EventDetailPage({
     event.eventType === WorkEventType.NIGHT_DUTY_RECORDED ||
     event.eventType === WorkEventType.TRAVEL_RECORDED;
 
-  const status = isClaim
-    ? await claimStatusService.getStatus(event.id)
-    : null;
+  const isSettlement =
+    event.eventType === WorkEventType.MONTHLY_CLAIM_SETTLEMENT;
+
+  const status =
+    isClaim || isSettlement
+      ? await claimStatusService.getStatus(event.id)
+      : null;
+
+  const monthlySettlement =
+    isClaim && event.parentEvent &&
+    event.parentEvent.voidedAt == null &&
+    event.parentEvent.eventType === WorkEventType.MONTHLY_CLAIM_SETTLEMENT
+      ? event.parentEvent
+      : null;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -46,6 +60,9 @@ export default async function EventDetailPage({
         <p className="text-sm text-muted-foreground">
           {formatDate(event.occurredAt)}
         </p>
+        {isClaim && status && (
+          <div className="mt-2">{claimStatusBadge(status)}</div>
+        )}
       </div>
 
       {event.remarks && (
@@ -54,7 +71,23 @@ export default async function EventDetailPage({
         </Card>
       )}
 
-      {isClaim && status && (
+      {monthlySettlement && status && (
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-4 text-sm">
+            <p className="text-muted-foreground">
+              Settlement is managed monthly for {monthlySettlement.title}.
+            </p>
+            <Link
+              href={`/claims/${monthlySettlement.id}`}
+              className="font-medium text-primary hover:underline"
+            >
+              View monthly settlement →
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {isSettlement && status && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Claim Status</CardTitle>
@@ -82,7 +115,7 @@ export default async function EventDetailPage({
         </Card>
       )}
 
-      {event.childEvents.length > 0 && (
+      {event.childEvents.length > 0 && !isSettlement && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Related Events</CardTitle>

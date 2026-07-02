@@ -2,6 +2,7 @@ import { ClaimStatus, EventDomain, WorkEventType } from "@/generated/prisma/clie
 import { prisma } from "@/lib/db";
 import { ledgerService } from "@/lib/services/ledger-service";
 import { claimStatusService } from "@/lib/services/claim-status-service";
+import { monthlyClaimService } from "@/lib/services/monthly-claim-service";
 import { formatDate } from "@/lib/utils";
 
 export type FeedAction = {
@@ -59,33 +60,31 @@ export const feedService = {
       }
     }
 
-    const pendingClaims = await prisma.workEvent.findMany({
+    const pendingSettlements = await prisma.workEvent.findMany({
       where: {
         userId,
-        eventType: {
-          in: [WorkEventType.NIGHT_DUTY_RECORDED, WorkEventType.TRAVEL_RECORDED],
-        },
+        eventType: WorkEventType.MONTHLY_CLAIM_SETTLEMENT,
         voidedAt: null,
       },
       take: 10,
       orderBy: { occurredAt: "desc" },
     });
 
-    for (const claim of pendingClaims) {
-      const status = await claimStatusService.getStatus(claim.id);
-      const payload = claim.payload as { to?: string; amount?: number };
+    for (const settlement of pendingSettlements) {
+      const status = await claimStatusService.getStatus(settlement.id);
       if (
         status === ClaimStatus.BILL_SUBMITTED ||
         status === ClaimStatus.PASSED
       ) {
+        const total = await monthlyClaimService.getSettlementTotal(settlement.id);
         items.push({
           type: "REMINDER",
           priority: "normal",
-          title: `${claim.title} is awaiting payment`,
-          body: payload.amount ? `₹${payload.amount}` : undefined,
+          title: `${settlement.title} is awaiting payment`,
+          body: total > 0 ? `₹${total}` : undefined,
           action: {
             label: "Update Status",
-            href: `/timeline/${claim.id}`,
+            href: `/claims/${settlement.id}`,
           },
         });
       }

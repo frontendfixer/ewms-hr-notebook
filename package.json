@@ -11,6 +11,7 @@
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
+    "backfill:settlements": "bun run scripts/backfill-monthly-settlements.ts",
     "test": "vitest run"
   },
   "dependencies": {
