@@ -11,6 +11,7 @@ import {
   Settings,
   Train,
   User,
+  Wallet,
 } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,6 +25,7 @@ const recordLinks: Array<{
   icon: typeof Award;
   domain?: EventDomain;
 }> = [
+  { href: "/leaves", label: "Manage Leaves", icon: Wallet },
   { href: "/records/all", label: "All Records", icon: List },
   { href: "/records/leave", label: "Leave", icon: Palmtree, domain: "LEAVE" },
   { href: "/records/cr", label: "CR", icon: Award, domain: "CR" },

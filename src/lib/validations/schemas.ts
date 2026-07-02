@@ -86,6 +86,13 @@ export const onboardingBalancesSchema = z.object({
   lhapBalance: z.coerce.number().default(20),
 });
 
+export const leaveBalanceAdjustSchema = z.object({
+  clBalance: z.coerce.number().min(0),
+  lapBalance: z.coerce.number().min(0),
+  lhapBalance: z.coerce.number().min(0),
+  reason: z.string().optional(),
+});
+
 export const holidaySchema = z.object({
   date: z.coerce.date(),
   name: z.string().min(1),
@@ -93,6 +100,7 @@ export const holidaySchema = z.object({
 
 export type HolidayWorkInput = z.infer<typeof holidayWorkSchema>;
 export type LeaveRecordInput = z.infer<typeof leaveRecordSchema>;
+export type LeaveBalanceAdjustInput = z.infer<typeof leaveBalanceAdjustSchema>;
 export type NightDutyInput = z.infer<typeof nightDutySchema>;
 export type TravelInput = z.infer<typeof travelSchema>;
 export type StatusTransitionInput = z.infer<typeof statusTransitionSchema>;

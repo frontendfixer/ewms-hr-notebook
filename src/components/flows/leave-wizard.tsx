@@ -8,7 +8,13 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { recordLeave } from "@/actions/events";
 import { toast } from "sonner";
 import { useState } from "react";
-import { LEAVE_TYPE_LABELS, LEAVE_TYPES_ORDERED } from "@/lib/leave-types";
+import type { LeaveType } from "@/generated/prisma/client";
+import {
+  BALANCE_DEDUCTING_LEAVE_TYPES,
+  LEAVE_TYPE_LABELS,
+  LEAVE_TYPES_FORM,
+} from "@/lib/leave-types";
+import { cn } from "@/lib/utils";
 
 type CrCredit = {
   creditEventId: string;
@@ -17,11 +23,22 @@ type CrCredit = {
   earnedAt: string | null;
 };
 
+type LeaveSelection = "USE_CR" | LeaveType;
+
+const USE_CR_LABEL = "Use CR (Compensatory Rest)";
+
 export function LeaveWizard({ credits }: { credits: CrCredit[] }) {
   const router = useRouter();
   const params = useSearchParams();
-  const [usesCr, setUsesCr] = useState(params.get("usesCr") === "1");
+  const initialSelection: LeaveSelection =
+    params.get("mode") === "cr" || params.get("usesCr") === "1"
+      ? "USE_CR"
+      : "CL";
   const preCr = params.get("cr") ?? credits[0]?.creditEventId;
+
+  const [selection, setSelection] = useState<LeaveSelection>(initialSelection);
+  const usesCr = selection === "USE_CR";
+  const leaveType: LeaveType = usesCr ? "SPECIAL_CL" : selection;
 
   return (
     <Card className="mx-auto max-w-lg">
@@ -41,16 +58,90 @@ export function LeaveWizard({ credits }: { credits: CrCredit[] }) {
           }}
           className="space-y-4"
         >
+          <input type="hidden" name="leaveType" value={leaveType} />
+          <input type="hidden" name="usesCr" value={usesCr ? "true" : "false"} />
+
           <div>
             <Label>Leave type</Label>
-            <Select name="leaveType" required defaultValue="SPECIAL_CL">
-              {LEAVE_TYPES_ORDERED.map((k) => (
-                <option key={k} value={k}>
-                  {LEAVE_TYPE_LABELS[k]}
-                </option>
+            <div className="mt-2 divide-y divide-border rounded-xl border border-border bg-card">
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm transition-colors",
+                  usesCr && "bg-primary/5",
+                )}
+              >
+                <span className="font-medium">{USE_CR_LABEL}</span>
+                <input
+                  type="radio"
+                  name="leaveSelection"
+                  checked={usesCr}
+                  onChange={() => setSelection("USE_CR")}
+                  className="h-4 w-4 accent-primary"
+                />
+              </label>
+              {LEAVE_TYPES_FORM.map((type) => (
+                <label
+                  key={type}
+                  className={cn(
+                    "flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm transition-colors",
+                    selection === type && "bg-primary/5",
+                  )}
+                >
+                  <span>{LEAVE_TYPE_LABELS[type]}</span>
+                  <input
+                    type="radio"
+                    name="leaveSelection"
+                    checked={selection === type}
+                    onChange={() => setSelection(type)}
+                    className="h-4 w-4 accent-primary"
+                  />
+                </label>
               ))}
-            </Select>
+            </div>
+            {usesCr ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Deducts from your CR balance, not your leave balance.
+              </p>
+            ) : BALANCE_DEDUCTING_LEAVE_TYPES.includes(selection) ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Deducts from your {LEAVE_TYPE_LABELS[selection]} balance.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Does not deduct from your leave balance.
+              </p>
+            )}
           </div>
+
+          {usesCr && credits.length > 0 && (
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+              <p className="text-sm font-medium">Select CR credits (FIFO)</p>
+              {credits.map((c) => (
+                <label
+                  key={c.creditEventId}
+                  className="mt-2 flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    name="crCreditEventIds"
+                    value={c.creditEventId}
+                    defaultChecked={c.creditEventId === preCr}
+                  />
+                  {c.balance} day — expires{" "}
+                  {c.expiresAt
+                    ? new Date(c.expiresAt).toLocaleDateString("en-IN")
+                    : "—"}
+                </label>
+              ))}
+            </div>
+          )}
+
+          {usesCr && credits.length === 0 && (
+            <p className="rounded-xl border border-amber-300 bg-amber-50/50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+              No CR credits available. Add CR from holiday work first.
+            </p>
+          )}
+
           <div>
             <Label>Leave dates</Label>
             <p className="mb-2 text-xs text-muted-foreground">
@@ -77,35 +168,7 @@ export function LeaveWizard({ credits }: { credits: CrCredit[] }) {
             <Label>Reason</Label>
             <Textarea name="reason" rows={2} />
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={usesCr}
-              onChange={(e) => setUsesCr(e.target.checked)}
-            />
-            Use CR?
-            <input type="hidden" name="usesCr" value={usesCr ? "true" : "false"} />
-          </label>
-          {usesCr && credits.length > 0 && (
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-              <p className="text-sm font-medium">Recommended (FIFO)</p>
-              {credits.map((c) => (
-                <label key={c.creditEventId} className="mt-2 flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    name="crCreditEventIds"
-                    value={c.creditEventId}
-                    defaultChecked={c.creditEventId === preCr}
-                  />
-                  {c.balance} day — expires{" "}
-                  {c.expiresAt
-                    ? new Date(c.expiresAt).toLocaleDateString("en-IN")
-                    : "—"}
-                </label>
-              ))}
-            </div>
-          )}
-          <Button type="submit" className="w-full">
+          <Button type="submit" className="w-full" disabled={usesCr && credits.length === 0}>
             Submit Leave
           </Button>
         </form>

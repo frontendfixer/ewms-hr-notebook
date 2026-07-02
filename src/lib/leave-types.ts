@@ -14,24 +14,27 @@ export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
   CCL: "Child Care Leave (CCL)",
   CHILD_ADOPTION: "Child Adoption Leave",
   CL: "Casual Leave (CL)",
-  SPECIAL_CL: "Special Casual Leave (incl. compensatory)",
+  SPECIAL_CL: "Special Casual Leave",
   JOINING_TIME: "Joining Time",
 };
 
-/** Display order in leave forms — common types first. */
-export const LEAVE_TYPES_ORDERED: LeaveType[] = [
+/** Leave types shown on the take-leave form (excludes removed / admin-only types). */
+export const LEAVE_TYPES_FORM: LeaveType[] = [
   "CL",
   "LAP",
   "LHAP",
-  "COMMUTED",
   "SPECIAL_CL",
-  "LND",
-  "EOL",
-  "STUDY",
-  "WRIIL",
   "PATERNITY",
   "MATERNITY",
   "CCL",
-  "CHILD_ADOPTION",
-  "JOINING_TIME",
 ];
+
+/** Only these leave types deduct from the user's leave balance ledger. */
+export const BALANCE_DEDUCTING_LEAVE_TYPES: LeaveType[] = ["CL", "LAP", "LHAP"];
+
+export function isBalanceDeductingLeaveType(type: LeaveType): boolean {
+  return BALANCE_DEDUCTING_LEAVE_TYPES.includes(type);
+}
+
+/** @deprecated Use LEAVE_TYPES_FORM */
+export const LEAVE_TYPES_ORDERED = LEAVE_TYPES_FORM;

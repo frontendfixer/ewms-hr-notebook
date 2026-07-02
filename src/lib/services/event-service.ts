@@ -14,6 +14,7 @@ import { getTaBaseAmount, requirePaySettings } from "@/lib/pay-settings";
 import { getUserSetting } from "@/lib/user-settings";
 import type {
   HolidayWorkInput,
+  LeaveBalanceAdjustInput,
   LeaveRecordInput,
   NightDutyInput,
   StatusTransitionInput,
@@ -21,12 +22,12 @@ import type {
 } from "@/lib/validations/schemas";
 import { claimStatusService } from "@/lib/services/claim-status-service";
 import { ledgerService } from "@/lib/services/ledger-service";
+import { isBalanceDeductingLeaveType } from "@/lib/leave-types";
 
 const LEAVE_ACCOUNT_MAP: Partial<Record<LeaveType, LedgerAccount>> = {
   CL: LedgerAccount.LEAVE_CL,
   LAP: LedgerAccount.LEAVE_LAP,
   LHAP: LedgerAccount.LEAVE_LHAP,
-  COMMUTED: LedgerAccount.LEAVE_COMMUTED,
 };
 
 export { getUserSetting } from "@/lib/user-settings";
@@ -138,7 +139,14 @@ export const eventService = {
     const correlationId = crypto.randomUUID();
 
     if (input.usesCr && input.leaveType !== LeaveType.SPECIAL_CL) {
-      throw new Error("CR can only be used with Special Casual Leave");
+      throw new Error("CR can only be used with compensatory rest leave");
+    }
+
+    if (input.usesCr) {
+      const crBalance = await ledgerService.getCrBalance(userId);
+      if (crBalance <= 0) {
+        throw new Error("No CR credits available");
+      }
     }
 
     const crIds = input.crCreditEventIds ?? [];
@@ -146,6 +154,10 @@ export const eventService = {
       const available = await ledgerService.getAvailableCrCredits(userId);
       if (available.length > 0) crIds.push(available[0].creditEventId);
     }
+
+    const leaveTitle = input.usesCr
+      ? `CR leave — ${formatDate(input.startDate)}${days > 1 ? ` to ${formatDate(input.endDate)}` : ""}`
+      : `${input.leaveType} leave — ${formatDate(input.startDate)}${days > 1 ? ` to ${formatDate(input.endDate)}` : ""}`;
 
     return prisma.$transaction(async (tx) => {
       const availableCredits =
@@ -159,7 +171,7 @@ export const eventService = {
           eventType: WorkEventType.LEAVE_RECORDED,
           domain: EventDomain.LEAVE,
           occurredAt: startOfDay(input.startDate),
-          title: `${input.leaveType} leave — ${formatDate(input.startDate)}${days > 1 ? ` to ${formatDate(input.endDate)}` : ""}`,
+          title: leaveTitle,
           remarks: input.reason,
           correlationId,
           payload: {
@@ -173,7 +185,7 @@ export const eventService = {
         },
       });
 
-      if (input.leaveType !== LeaveType.SPECIAL_CL) {
+      if (!input.usesCr && isBalanceDeductingLeaveType(input.leaveType)) {
         const account = LEAVE_ACCOUNT_MAP[input.leaveType];
         if (account) {
           await tx.ledgerEntry.create({
@@ -189,38 +201,104 @@ export const eventService = {
         }
       }
 
-      for (const crId of crIds) {
-        const match = availableCredits.find((c) => c.creditEventId === crId);
-        if (!match || match.balance <= 0) {
-          throw new Error("Selected CR credit is not available");
+      if (input.usesCr) {
+        for (const crId of crIds) {
+          const match = availableCredits.find((c) => c.creditEventId === crId);
+          if (!match || match.balance <= 0) {
+            throw new Error("Selected CR credit is not available");
+          }
+
+          await tx.workEvent.create({
+            data: {
+              userId,
+              eventType: WorkEventType.CR_CONSUMED,
+              domain: EventDomain.CR,
+              occurredAt: startOfDay(input.startDate),
+              title: `CR consumed for leave`,
+              correlationId,
+              parentEventId: leave.id,
+              payload: { crCreditEventId: crId, leaveEventId: leave.id },
+            },
+          });
+
+          await tx.ledgerEntry.create({
+            data: {
+              userId,
+              eventId: leave.id,
+              account: LedgerAccount.CR_CREDIT,
+              subAccountKey: crId,
+              amount: -1,
+              occurredAt: startOfDay(input.startDate),
+            },
+          });
         }
+      }
 
-        await tx.workEvent.create({
-          data: {
-            userId,
-            eventType: WorkEventType.CR_CONSUMED,
-            domain: EventDomain.CR,
-            occurredAt: startOfDay(input.startDate),
-            title: `CR consumed for leave`,
-            correlationId,
-            parentEventId: leave.id,
-            payload: { crCreditEventId: crId, leaveEventId: leave.id },
+      return leave;
+    }, INTERACTIVE_TX_OPTIONS);
+  },
+
+  async adjustLeaveBalances(userId: string, input: LeaveBalanceAdjustInput) {
+    const current = await ledgerService.getBalances(userId);
+    const targets = [
+      {
+        account: LedgerAccount.LEAVE_CL,
+        current: current.LEAVE_CL ?? 0,
+        target: input.clBalance,
+        label: "CL",
+      },
+      {
+        account: LedgerAccount.LEAVE_LAP,
+        current: current.LEAVE_LAP ?? 0,
+        target: input.lapBalance,
+        label: "LAP",
+      },
+      {
+        account: LedgerAccount.LEAVE_LHAP,
+        current: current.LEAVE_LHAP ?? 0,
+        target: input.lhapBalance,
+        label: "LHAP",
+      },
+    ];
+
+    const deltas = targets
+      .map((t) => ({ ...t, delta: t.target - t.current }))
+      .filter((t) => t.delta !== 0);
+
+    if (deltas.length === 0) return null;
+
+    return prisma.$transaction(async (tx) => {
+      const adjustment = await tx.workEvent.create({
+        data: {
+          userId,
+          eventType: WorkEventType.LEAVE_LEDGER_ADJUSTMENT,
+          domain: EventDomain.LEAVE,
+          occurredAt: new Date(),
+          title: "Leave balance updated",
+          remarks: input.reason,
+          payload: {
+            type: "manual",
+            clBalance: input.clBalance,
+            lapBalance: input.lapBalance,
+            lhapBalance: input.lhapBalance,
           },
-        });
+        },
+      });
 
+      for (const { account, delta, label } of deltas) {
         await tx.ledgerEntry.create({
           data: {
             userId,
-            eventId: leave.id,
-            account: LedgerAccount.CR_CREDIT,
-            subAccountKey: crId,
-            amount: -1,
-            occurredAt: startOfDay(input.startDate),
+            eventId: adjustment.id,
+            account,
+            amount: delta,
+            occurredAt: new Date(),
+            metadata: { leaveType: label, reason: input.reason },
           },
         });
       }
 
-      return leave;
+      return adjustment;
     }, INTERACTIVE_TX_OPTIONS);
   },
 

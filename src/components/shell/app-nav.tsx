@@ -22,6 +22,7 @@ const mainNav = [
 ];
 
 const moreNav = [
+  { href: "/leaves", label: "Manage Leaves" },
   { href: "/records/all", label: "All Records" },
   { href: "/records/leave", label: "Leave" },
   { href: "/records/cr", label: "CR" },
@@ -58,7 +59,7 @@ export function AppSidebar() {
         ))}
         <div className="my-2 border-t border-border/60" />
         <p className="px-3 text-xs font-medium text-muted-foreground">My Records</p>
-        {moreNav.slice(0, 5).map(({ href, label }) => (
+        {moreNav.slice(0, 6).map(({ href, label }) => (
           <Link
             key={href}
             href={href}
@@ -138,8 +139,9 @@ export function BottomNav() {
         href="/more"
         className={cn(
           "flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px]",
-          pathname === "/more" ||
+            pathname === "/more" ||
             pathname.startsWith("/records") ||
+            pathname.startsWith("/leaves") ||
             pathname.startsWith("/settings") ||
             pathname.startsWith("/profile") ||
             pathname.startsWith("/reports") ||
