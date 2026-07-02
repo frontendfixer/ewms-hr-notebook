@@ -22,6 +22,7 @@ import type {
 } from "@/lib/validations/schemas";
 import { claimStatusService } from "@/lib/services/claim-status-service";
 import { ledgerService } from "@/lib/services/ledger-service";
+import { monthlyClaimService } from "@/lib/services/monthly-claim-service";
 import { isBalanceDeductingLeaveType } from "@/lib/leave-types";
 
 const LEAVE_ACCOUNT_MAP: Partial<Record<LeaveType, LedgerAccount>> = {
@@ -327,9 +328,10 @@ export const eventService = {
       throw new Error(`Night duty already recorded for: ${taken}`);
     }
 
-    return prisma.$transaction(
-      dates.map((dutyDate) =>
-        prisma.workEvent.create({
+    return prisma.$transaction(async (tx) => {
+      const created = [];
+      for (const dutyDate of dates) {
+        const event = await tx.workEvent.create({
           data: {
             userId,
             eventType: WorkEventType.NIGHT_DUTY_RECORDED,
@@ -348,12 +350,14 @@ export const eventService = {
               basicPay: pay.basicPay,
               daPercent: pay.daPercent,
               dearnessAllowance: pay.dearnessAllowance,
-              currentStatus: ClaimStatus.DRAFT,
             },
           },
-        }),
-      ),
-    );
+        });
+        await monthlyClaimService.attachClaimToSettlement(userId, event.id, tx);
+        created.push(event);
+      }
+      return created;
+    }, INTERACTIVE_TX_OPTIONS);
   },
 
   async recordTravel(userId: string, input: TravelInput) {
@@ -361,26 +365,29 @@ export const eventService = {
     const journeyDate = startOfDay(input.journeyDate);
     const amount = calculateTaAmount(taBaseAmount, input.claimPercent);
 
-    return prisma.workEvent.create({
-      data: {
-        userId,
-        eventType: WorkEventType.TRAVEL_RECORDED,
-        domain: EventDomain.TRAVEL,
-        occurredAt: journeyDate,
-        title: `Travel — ${input.to}`,
-        remarks: input.remarks,
-        payload: {
-          journeyDate: journeyDate.toISOString(),
-          from: input.from,
-          to: input.to,
-          purpose: input.purpose,
-          amount,
-          taBaseAmount,
-          claimPercent: input.claimPercent,
-          currentStatus: ClaimStatus.DRAFT,
+    return prisma.$transaction(async (tx) => {
+      const event = await tx.workEvent.create({
+        data: {
+          userId,
+          eventType: WorkEventType.TRAVEL_RECORDED,
+          domain: EventDomain.TRAVEL,
+          occurredAt: journeyDate,
+          title: `Travel — ${input.to}`,
+          remarks: input.remarks,
+          payload: {
+            journeyDate: journeyDate.toISOString(),
+            from: input.from,
+            to: input.to,
+            purpose: input.purpose,
+            amount,
+            taBaseAmount,
+            claimPercent: input.claimPercent,
+          },
         },
-      },
-    });
+      });
+      await monthlyClaimService.attachClaimToSettlement(userId, event.id, tx);
+      return event;
+    }, INTERACTIVE_TX_OPTIONS);
   },
 
   async transitionClaimStatus(userId: string, input: StatusTransitionInput) {
@@ -388,6 +395,12 @@ export const eventService = {
       where: { id: input.claimEventId, userId, voidedAt: null },
     });
     if (!claim) throw new Error("Claim not found");
+
+    if (claim.eventType !== WorkEventType.MONTHLY_CLAIM_SETTLEMENT) {
+      throw new Error(
+        "Status transitions must be performed on monthly settlements",
+      );
+    }
 
     const current = await claimStatusService.getStatus(claim.id);
     const next = claimStatusService.getNextStatus(current);
@@ -410,7 +423,7 @@ export const eventService = {
           userId,
           eventType,
           domain: EventDomain.META,
-          occurredAt: new Date(),
+          occurredAt: input.paymentDate ?? new Date(),
           title: `Status → ${input.toStatus}`,
           parentEventId: claim.id,
           remarks: input.remarks,
@@ -433,8 +446,13 @@ export const eventService = {
           payload: {
             ...existingPayload,
             currentStatus: input.toStatus,
-            ...(input.amount != null ? { amount: input.amount } : {}),
             ...(input.billNumber ? { billNumber: input.billNumber } : {}),
+            ...(input.paymentDate
+              ? { paymentDate: input.paymentDate.toISOString() }
+              : {}),
+            ...(input.paymentReference
+              ? { paymentReference: input.paymentReference }
+              : {}),
           },
         },
       });

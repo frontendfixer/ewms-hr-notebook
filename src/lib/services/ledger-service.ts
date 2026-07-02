@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 
 type LedgerDb = Prisma.TransactionClient | typeof prisma;
 import { claimStatusService } from "@/lib/services/claim-status-service";
+import { monthlyClaimService } from "@/lib/services/monthly-claim-service";
 
 export const ledgerService = {
   async getBalances(userId: string) {
@@ -58,23 +59,41 @@ export const ledgerService = {
   },
 
   async getPendingMoney(userId: string): Promise<number> {
-    const claims = await prisma.workEvent.findMany({
+    const settlements = await prisma.workEvent.findMany({
+      where: {
+        userId,
+        eventType: WorkEventType.MONTHLY_CLAIM_SETTLEMENT,
+        voidedAt: null,
+      },
+    });
+
+    let total = 0;
+    for (const settlement of settlements) {
+      const status = await claimStatusService.getStatus(settlement.id);
+      if (status !== ClaimStatus.PAID && status !== ClaimStatus.VOIDED) {
+        total += await monthlyClaimService.getSettlementTotal(settlement.id);
+      }
+    }
+
+    const orphanClaims = await prisma.workEvent.findMany({
       where: {
         userId,
         eventType: {
           in: [WorkEventType.NIGHT_DUTY_RECORDED, WorkEventType.TRAVEL_RECORDED],
         },
+        parentEventId: null,
         voidedAt: null,
       },
     });
-    let total = 0;
-    for (const claim of claims) {
+
+    for (const claim of orphanClaims) {
       const status = await claimStatusService.getStatus(claim.id);
       if (status !== ClaimStatus.PAID && status !== ClaimStatus.VOIDED) {
         const payload = claim.payload as { amount?: number };
         total += payload.amount ?? 0;
       }
     }
+
     return total;
   },
 };
