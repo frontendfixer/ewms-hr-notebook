@@ -9,6 +9,7 @@ import {
   domainCardClass,
   domainIconClass,
   domainLabelClass,
+  usedCrCardClass,
 } from "@/lib/domain-styles";
 import { formatCurrency, cn } from "@/lib/utils";
 import { Award, Moon, Palmtree, Sun, Train } from "lucide-react";
@@ -28,6 +29,7 @@ type EventCardShellProps = {
   headline: string;
   subtitle?: string;
   details?: string[];
+  isUsedCr?: boolean;
   statusBadge?: ReactNode;
   amount?: number;
   purpose?: string;
@@ -39,29 +41,36 @@ export function EventCardShell({
   headline,
   subtitle,
   details,
+  isUsedCr = false,
   statusBadge,
   amount,
   purpose,
 }: EventCardShellProps) {
   const Icon = domainIcons[domain];
+  const cardClass =
+    domain === "CR" && isUsedCr
+      ? usedCrCardClass()
+      : domainCardClass(domain);
 
   return (
-    <Card className={cn("transition-shadow hover:shadow-md", domainCardClass(domain))}>
+    <Card className={cn("transition-shadow hover:shadow-md", cardClass)}>
       <CardContent className="flex items-center gap-2 p-4">
         <Link href={`/timeline/${id}`} className="flex min-w-0 flex-1 items-center gap-3">
           <div
             className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-              domainIconClass(domain),
+              domainIconClass(domain, isUsedCr),
             )}
           >
             <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className={cn("text-xs font-medium", domainLabelClass(domain))}>
+            <p className={cn("text-xs font-medium", domainLabelClass(domain, isUsedCr))}>
               {DOMAIN_LABELS[domain]}
             </p>
-            <p className="truncate font-medium">{headline}</p>
+            <p className={cn("truncate font-medium", isUsedCr && "text-muted-foreground")}>
+              {headline}
+            </p>
             {subtitle && (
               <p className="text-xs text-muted-foreground">{subtitle}</p>
             )}
