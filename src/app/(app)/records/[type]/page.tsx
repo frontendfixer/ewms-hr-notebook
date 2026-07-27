@@ -105,10 +105,15 @@ export default async function RecordsPage({
               <p className="text-sm">None</p>
             ) : (
               credits.map((c) => (
-                <p key={c.creditEventId} className="text-sm">
-                  {c.balance} day — expires{" "}
-                  {c.expiresAt ? formatDate(c.expiresAt) : "—"}
-                </p>
+                <div key={c.creditEventId} className="text-sm">
+                  <p>
+                    {c.balance} day — CR date{" "}
+                    {c.earnedAt ? formatDate(c.earnedAt) : "—"}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Expires {c.expiresAt ? formatDate(c.expiresAt) : "—"}
+                  </p>
+                </div>
               ))
             )}
           </CardContent>

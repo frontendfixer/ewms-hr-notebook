@@ -27,6 +27,7 @@ type EventCardShellProps = {
   domain: EventDomain;
   headline: string;
   subtitle?: string;
+  details?: string[];
   statusBadge?: ReactNode;
   amount?: number;
   purpose?: string;
@@ -37,6 +38,7 @@ export function EventCardShell({
   domain,
   headline,
   subtitle,
+  details,
   statusBadge,
   amount,
   purpose,
@@ -62,6 +64,15 @@ export function EventCardShell({
             <p className="truncate font-medium">{headline}</p>
             {subtitle && (
               <p className="text-xs text-muted-foreground">{subtitle}</p>
+            )}
+            {details && details.length > 0 && (
+              <div className="mt-0.5 space-y-0.5">
+                {details.map((detail) => (
+                  <p key={detail} className="text-xs text-muted-foreground">
+                    {detail}
+                  </p>
+                ))}
+              </div>
             )}
             {(statusBadge || amount != null || purpose) && (
               <div className="mt-1 flex items-center gap-2">
