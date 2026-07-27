@@ -3,7 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { claimStatusBadge } from "@/components/ui/badge";
 import { EventCardShell } from "@/components/timeline/event-card-shell";
 import { claimStatusService } from "@/lib/services/claim-status-service";
+import { eventService } from "@/lib/services/event-service";
 import { formatEventCardDisplay } from "@/lib/event-card-display";
+import { requireUserId } from "@/lib/auth-server";
 
 type EventCardProps = {
   id: string;
@@ -41,12 +43,19 @@ export async function EventCard({
     statusBadge = claimStatusBadge(status);
   }
 
-  const { headline, subtitle } = formatEventCardDisplay(
+  let leaveAppliedAt: Date | null = null;
+  if (eventType === "CR_CREDIT_ISSUED") {
+    const userId = await requireUserId();
+    leaveAppliedAt = await eventService.getCrLeaveAppliedDate(userId, id);
+  }
+
+  const { headline, subtitle, details } = formatEventCardDisplay(
     domain,
     title,
     occurredAt,
     p,
     eventType,
+    { leaveAppliedAt },
   );
   const purpose =
     domain === "TRAVEL" && p.purpose && p.purpose !== p.to ? p.purpose : undefined;
@@ -59,6 +68,7 @@ export async function EventCard({
       domain={domain}
       headline={headline}
       subtitle={subtitle}
+      details={details}
       statusBadge={statusBadge}
       amount={showAmount}
       purpose={purpose}

@@ -589,4 +589,31 @@ export const eventService = {
 
     return events;
   },
+
+  async getCrLeaveAppliedDate(
+    userId: string,
+    crCreditEventId: string,
+  ): Promise<Date | null> {
+    const consumedEvents = await prisma.workEvent.findMany({
+      where: {
+        userId,
+        eventType: WorkEventType.CR_CONSUMED,
+        voidedAt: null,
+      },
+      include: { parentEvent: true },
+    });
+
+    const match = consumedEvents.find((event) => {
+      const payload = event.payload as { crCreditEventId?: string };
+      return payload.crCreditEventId === crCreditEventId;
+    });
+
+    if (!match?.parentEvent || match.parentEvent.voidedAt) return null;
+
+    const leavePayload = match.parentEvent.payload as {
+      startDate?: string;
+    };
+    if (leavePayload.startDate) return new Date(leavePayload.startDate);
+    return match.parentEvent.occurredAt;
+  },
 };

@@ -4,6 +4,7 @@ import { formatDate, formatShortDate } from "@/lib/utils";
 export type EventCardDisplay = {
   headline: string;
   subtitle?: string;
+  details?: string[];
 };
 
 type EventCardPayload = {
@@ -14,12 +15,17 @@ type EventCardPayload = {
   expiresAt?: string;
 };
 
+type FormatEventCardOptions = {
+  leaveAppliedAt?: Date | null;
+};
+
 export function formatEventCardDisplay(
   domain: EventDomain,
   title: string,
   occurredAt: Date,
   payload?: EventCardPayload,
   eventType?: string,
+  options?: FormatEventCardOptions,
 ): EventCardDisplay {
   switch (domain) {
     case "NIGHT_DUTY": {
@@ -44,12 +50,20 @@ export function formatEventCardDisplay(
         /^\+(\d+)\s*CR earned/i.test(title)
       ) {
         const days = payload?.amount ?? title.match(/^\+(\d+)/)?.[1] ?? "1";
+        const crDate = formatDate(occurredAt);
         const expiresAt = payload?.expiresAt
           ? formatDate(payload.expiresAt)
           : title.match(/\(expires\s+([^)]+)\)/i)?.[1];
+        const leaveAppliedAt = options?.leaveAppliedAt;
         return {
           headline: `+${days} CR earned`,
-          subtitle: expiresAt ? `Expires ${expiresAt}` : undefined,
+          details: [
+            `CR date ${crDate}`,
+            expiresAt ? `Expires ${expiresAt}` : "Expires —",
+            leaveAppliedAt
+              ? `Leave applied ${formatDate(leaveAppliedAt)}`
+              : "Leave applied —",
+          ],
         };
       }
       const match = title.match(/^CR work \(([^)]+)\)\s*(—|-)\s*(.+)$/i);
