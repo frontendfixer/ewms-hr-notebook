@@ -14,7 +14,7 @@ import {
   LEAVE_TYPE_LABELS,
   LEAVE_TYPES_FORM,
 } from "@/lib/leave-types";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 
 type CrCredit = {
   creditEventId: string;
@@ -127,10 +127,8 @@ export function LeaveWizard({ credits }: { credits: CrCredit[] }) {
                     value={c.creditEventId}
                     defaultChecked={c.creditEventId === preCr}
                   />
-                  {c.balance} day — expires{" "}
-                  {c.expiresAt
-                    ? new Date(c.expiresAt).toLocaleDateString("en-IN")
-                    : "—"}
+                  {c.balance} day — CR date{" "}
+                  {c.earnedAt ? formatDate(c.earnedAt) : "—"}
                 </label>
               ))}
             </div>
