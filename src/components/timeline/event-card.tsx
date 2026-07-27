@@ -69,6 +69,7 @@ export async function EventCard({
       headline={headline}
       subtitle={subtitle}
       details={details}
+      isUsedCr={eventType === "CR_CREDIT_ISSUED" && leaveAppliedAt != null}
       statusBadge={statusBadge}
       amount={showAmount}
       purpose={purpose}

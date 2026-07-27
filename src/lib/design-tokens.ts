@@ -82,6 +82,14 @@ export const DOMAIN_STYLES: Record<
   },
 };
 
+/** Muted palette for CR credits that have been consumed with leave. */
+export const USED_CR_STYLES = {
+  card: "bg-slate-500/8",
+  border: "border-slate-400/25",
+  icon: "bg-slate-500/15 text-slate-600 dark:text-slate-400",
+  label: "text-slate-600 dark:text-slate-400",
+} as const;
+
 /** @deprecated Use DOMAIN_STYLES[domain].dot */
 export const DOMAIN_DOT_COLORS: Record<EventDomain, string> = {
   CR: DOMAIN_STYLES.CR.dot,
