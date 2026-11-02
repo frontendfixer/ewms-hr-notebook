@@ -26,16 +26,22 @@ export default async function ClaimsPage() {
       <h1 className="text-2xl font-bold">Claims</h1>
       <Card>
         <CardContent className="p-4">
-          <p className="text-sm text-muted-foreground">Pending money</p>
+          <p className="text-sm text-muted-foreground">Claims due to you</p>
           <p className="text-2xl font-bold">{formatCurrency(pendingTotal)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Night duty and travel are grouped into one claim per month. Open a
+            month to record the bill and payment.
+          </p>
         </CardContent>
       </Card>
       <ClaimYearStatsCard stats={stats} />
       <PassedAwaitingPaymentCard data={stats.passedAwaitingPayment} />
       <div className="space-y-2">
         {remainingPending.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">
-            {pending.length === 0 ? "All claims paid!" : "No other pending settlements"}
+          <p className="py-8 text-center text-muted-foreground">
+            {pending.length === 0
+              ? "Nothing pending — all claims are paid."
+              : "No other pending months"}
           </p>
         ) : (
           remainingPending.map((settlement) => (
@@ -45,7 +51,7 @@ export default async function ClaimsPage() {
               domain={settlement.domain as ClaimSettlementDomain}
               title={settlement.title}
               childCount={settlement.childCount}
-              total={settlement.total}
+              total={settlement.outstanding}
               status={settlement.status}
             />
           ))

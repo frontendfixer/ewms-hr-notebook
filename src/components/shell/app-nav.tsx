@@ -36,7 +36,7 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden lg:flex lg:w-56 lg:flex-col lg:border-r lg:border-border/60 lg:bg-card lg:p-4">
+    <aside className="hidden print:hidden lg:flex lg:w-56 lg:flex-col lg:border-r lg:border-border/60 lg:bg-card lg:p-4">
       <div className="mb-6 px-2">
         <span className="text-lg font-bold tracking-tight">EWMS</span>
         <p className="text-xs text-muted-foreground">Personal HR Notebook</p>
@@ -119,13 +119,19 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-border/60 bg-card/95 backdrop-blur lg:hidden">
+    <nav
+      aria-label="Main"
+      className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-border/60 bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur print:hidden lg:hidden"
+    >
       {mainNav.map(({ href, label, icon: Icon }) => (
         <Link
           key={href}
           href={href}
+          aria-current={
+            pathname === href || pathname.startsWith(href + "/") ? "page" : undefined
+          }
           className={cn(
-            "flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px]",
+            "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]",
             pathname === href || pathname.startsWith(href + "/")
               ? "text-primary"
               : "text-muted-foreground",
@@ -138,7 +144,7 @@ export function BottomNav() {
       <Link
         href="/more"
         className={cn(
-          "flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px]",
+          "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]",
             pathname === "/more" ||
             pathname.startsWith("/records") ||
             pathname.startsWith("/leaves") ||

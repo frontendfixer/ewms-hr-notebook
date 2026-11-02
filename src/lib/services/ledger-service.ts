@@ -24,15 +24,19 @@ export const ledgerService = {
     return map;
   },
 
-  async getAvailableCrCredits(userId: string, db: LedgerDb = prisma) {
-    const now = new Date();
+  /** CR credits with a positive balance that are still valid on `validOn`. */
+  async getAvailableCrCredits(
+    userId: string,
+    db: LedgerDb = prisma,
+    validOn: Date = new Date(),
+  ) {
     const credits = await db.ledgerEntry.groupBy({
       by: ["subAccountKey"],
       where: {
         userId,
         account: LedgerAccount.CR_CREDIT,
         subAccountKey: { not: null },
-        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        OR: [{ expiresAt: null }, { expiresAt: { gt: validOn } }],
       },
       _sum: { amount: true },
       _min: { expiresAt: true, occurredAt: true },
@@ -69,10 +73,8 @@ export const ledgerService = {
 
     let total = 0;
     for (const settlement of settlements) {
-      const status = await claimStatusService.getStatus(settlement.id);
-      if (status !== ClaimStatus.PAID && status !== ClaimStatus.VOIDED) {
-        total += await monthlyClaimService.getSettlementTotal(settlement.id);
-      }
+      const summary = await monthlyClaimService.getSettlementSummary(settlement.id);
+      total += summary.outstanding;
     }
 
     const orphanClaims = await prisma.workEvent.findMany({

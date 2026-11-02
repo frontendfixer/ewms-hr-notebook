@@ -1,9 +1,10 @@
 import { ClaimStatus, EventDomain, WorkEventType } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { ledgerService } from "@/lib/services/ledger-service";
-import { claimStatusService } from "@/lib/services/claim-status-service";
 import { monthlyClaimService } from "@/lib/services/monthly-claim-service";
-import { formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { leaveAccrualService } from "@/lib/services/leave-accrual-service";
+import { getPaySettings } from "@/lib/pay-settings";
 
 export type FeedAction = {
   label: string;
@@ -40,6 +41,17 @@ export const feedService = {
   async getFeed(userId: string): Promise<FeedItem[]> {
     const items: FeedItem[] = [];
 
+    const pay = await getPaySettings(userId);
+    if (!pay.configured || pay.payLevel == null) {
+      items.push({
+        type: "REMINDER",
+        priority: "high",
+        title: "Add your pay level and basic pay",
+        body: "Needed to work out night duty allowance and daily allowance.",
+        action: { label: "Settings", href: "/settings" },
+      });
+    }
+
     const crCredits = await ledgerService.getAvailableCrCredits(userId);
     const now = new Date();
     for (const cr of crCredits) {
@@ -51,7 +63,7 @@ export const feedService = {
         items.push({
           type: "REMINDER",
           priority: daysLeft <= 7 ? "high" : "normal",
-          title: `CR earned ${cr.earnedAt ? formatDate(cr.earnedAt) : ""} expires in ${daysLeft} days`,
+          title: `CR earned ${cr.earnedAt ? formatDate(cr.earnedAt) : ""} expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
           action: {
             label: "Use It",
             href: `/add/leave?mode=cr&cr=${cr.creditEventId}`,
@@ -70,22 +82,46 @@ export const feedService = {
       orderBy: { occurredAt: "desc" },
     });
 
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     for (const settlement of pendingSettlements) {
-      const status = await claimStatusService.getStatus(settlement.id);
+      const summary = await monthlyClaimService.getSettlementSummary(settlement.id);
+      if (summary.total <= 0) continue;
       if (
-        status === ClaimStatus.BILL_SUBMITTED ||
-        status === ClaimStatus.PASSED
+        summary.status === ClaimStatus.BILL_SUBMITTED ||
+        summary.status === ClaimStatus.PASSED
       ) {
-        const total = await monthlyClaimService.getSettlementTotal(settlement.id);
         items.push({
           type: "REMINDER",
           priority: "normal",
           title: `${settlement.title} is awaiting payment`,
-          body: total > 0 ? `₹${total}` : undefined,
+          body: formatCurrency(summary.outstanding),
           action: {
             label: "Update Status",
             href: `/claims/${settlement.id}`,
           },
+        });
+      } else if (
+        summary.status === ClaimStatus.DRAFT &&
+        summary.outstanding > 0 &&
+        settlement.occurredAt < currentMonthStart
+      ) {
+        items.push({
+          type: "REMINDER",
+          priority: "normal",
+          title:
+            summary.paid > 0
+              ? `${settlement.title} has new entries to bill`
+              : `${settlement.title} is not billed yet`,
+          body: `${formatCurrency(summary.outstanding)} to claim`,
+          action: { label: "Open", href: `/claims/${settlement.id}` },
+        });
+      } else if (summary.shortPaid > 0) {
+        items.push({
+          type: "REMINDER",
+          priority: "normal",
+          title: `${settlement.title} was short-paid`,
+          body: `${formatCurrency(summary.shortPaid)} not received`,
+          action: { label: "Open", href: `/claims/${settlement.id}` },
         });
       }
     }
@@ -133,6 +169,7 @@ export const feedService = {
   },
 
   async getBalancesSummary(userId: string) {
+    await leaveAccrualService.ensureAccruals(userId);
     const balances = await ledgerService.getBalances(userId);
     const crBalance = await ledgerService.getCrBalance(userId);
     const pendingMoney = await ledgerService.getPendingMoney(userId);

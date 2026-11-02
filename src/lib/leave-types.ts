@@ -1,6 +1,6 @@
 import type { LeaveType } from "@/generated/prisma/client";
 
-/** Indian Railways leave types (Liberalised Leave Rules, 1949). */
+/** Indian Railways leave types (Indian Railway Establishment Code Vol. I, Chapter V). */
 export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
   LAP: "Leave on Average Pay (LAP)",
   LHAP: "Leave on Half Average Pay (LHAP)",
@@ -16,6 +16,23 @@ export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
   CL: "Casual Leave (CL)",
   SPECIAL_CL: "Special Casual Leave",
   JOINING_TIME: "Joining Time",
+};
+
+export const LEAVE_TYPE_SHORT_LABELS: Record<LeaveType, string> = {
+  LAP: "LAP",
+  LHAP: "LHAP",
+  COMMUTED: "Commuted leave",
+  LND: "LND",
+  EOL: "EOL",
+  STUDY: "Study leave",
+  WRIIL: "WRIIL",
+  PATERNITY: "Paternity leave",
+  MATERNITY: "Maternity leave",
+  CCL: "CCL",
+  CHILD_ADOPTION: "Child adoption leave",
+  CL: "CL",
+  SPECIAL_CL: "Special CL",
+  JOINING_TIME: "Joining time",
 };
 
 /** Leave types shown on the take-leave form (excludes removed / admin-only types). */

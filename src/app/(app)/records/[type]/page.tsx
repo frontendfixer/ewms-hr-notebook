@@ -6,6 +6,7 @@ import {
   RecordsPeriodFilters,
 } from "@/components/filters/records-filter-chips";
 import { ledgerService } from "@/lib/services/ledger-service";
+import { claimStatusService } from "@/lib/services/claim-status-service";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 import { Suspense } from "react";
@@ -40,16 +41,23 @@ async function RecordsList({
     rootOnly: timeFilter !== "pending",
   });
 
+  // Claim status lives on the monthly settlement, not on each entry.
   const filtered =
     timeFilter === "pending"
-      ? events.filter((e) => {
-          const p = e.payload as { currentStatus?: string };
-          return (
-            (e.eventType === "NIGHT_DUTY_RECORDED" ||
-              e.eventType === "TRAVEL_RECORDED") &&
-            p.currentStatus !== "PAID"
-          );
-        })
+      ? (
+          await Promise.all(
+            events.map(async (e) => {
+              if (
+                e.eventType !== "NIGHT_DUTY_RECORDED" &&
+                e.eventType !== "TRAVEL_RECORDED"
+              ) {
+                return null;
+              }
+              const status = await claimStatusService.getStatus(e.id);
+              return status !== "PAID" ? e : null;
+            }),
+          )
+        ).filter((e): e is (typeof events)[number] => e !== null)
       : events;
 
   if (filtered.length === 0) {

@@ -13,6 +13,7 @@ type EventCardPayload = {
   dayLabel?: string;
   amount?: number;
   expiresAt?: string;
+  days?: number;
 };
 
 type FormatEventCardOptions = {
@@ -43,6 +44,10 @@ export function formatEventCardDisplay(
     case "LEAVE":
       return {
         headline: title.replace(/\s+leave\s*(—|-)/i, " —"),
+        subtitle:
+          payload?.days != null
+            ? `${payload.days} day${payload.days === 1 ? "" : "s"} charged`
+            : undefined,
       };
     case "CR": {
       if (

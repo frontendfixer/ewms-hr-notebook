@@ -78,20 +78,22 @@ Used in: timeline cards, calendar dots, FAB icons, report bars, filter chips.
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `DEFAULT_CR_EXPIRY_DAYS` | 90 | CR credit expiry from work date |
-| `DEFAULT_TA_BASE_AMOUNT` | 625 | Default travel allowance base (₹) |
+| `DEFAULT_CR_EXPIRY_DAYS` | 90 | CR credit validity from work date (set per office orders) |
+
+Allowance and leave rule constants (DA history, NDA ceiling, daily allowance
+rates, CL/LAP/LHAP credits) live in `src/lib/calculations/`.
 
 ### Setting keys
 
-`crExpiryDays`, `clEntitlement`, `elEntitlement`, `basicPay`, `daPercent`, `taBaseAmount`
-
-(`clEntitlement` and `elEntitlement` are defined but not yet used in UI.)
+`crExpiryDays`, `clEntitlement`, `basicPay`, `payLevel`, `daPercentOverride`,
+`taRateOverride`, `autoLeaveCredits`. Blank overrides fall back to the official
+rate for the date.
 
 ### Claim status labels
 
 | Enum | Label |
 |------|-------|
-| `DRAFT` | Pending |
+| `DRAFT` | Not yet billed |
 | `BILL_SUBMITTED` | Bill Submitted |
 | `PASSED` | Passed |
 | `PAID` | Paid |

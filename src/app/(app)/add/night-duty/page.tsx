@@ -6,6 +6,10 @@ export default async function AddNightDutyPage() {
   const userId = await requireUserId();
   const pay = await getPaySettings(userId);
   return (
-    <NightDutyForm basicPay={pay.basicPay} daPercent={pay.daPercent} />
+    <NightDutyForm
+      basicPay={pay.basicPay}
+      payLevel={pay.payLevel}
+      daPercentOverride={pay.daPercentOverride}
+    />
   );
 }

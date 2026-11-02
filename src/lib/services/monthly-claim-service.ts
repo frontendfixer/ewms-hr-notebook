@@ -4,6 +4,7 @@ import {
   WorkEventType,
 } from "@/generated/prisma/client";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "@/lib/db";
+import { formatDate } from "@/lib/utils";
 import { claimStatusService } from "@/lib/services/claim-status-service";
 import {
   aggregateChildStatuses,
@@ -16,7 +17,6 @@ import {
   type ClaimDomainSegment,
   type ClaimSettlementDomain,
   type ClaimStatusBreakdown,
-  type ClaimStatusSegment,
 } from "@/lib/services/monthly-claim-utils";
 
 export {
@@ -35,6 +35,17 @@ export type {
   ClaimStatusSegment,
   MonthKey,
 } from "@/lib/services/monthly-claim-utils";
+
+export type SettlementSummary = {
+  status: ClaimStatus;
+  total: number;
+  /** Sum of amounts recorded on "Paid" status updates. */
+  paid: number;
+  /** Claimed minus received, never below zero. */
+  outstanding: number;
+  /** Paid less than claimed after the bill was marked paid. */
+  shortPaid: number;
+};
 
 export type PassedAwaitingSettlement = {
   id: string;
@@ -152,6 +163,88 @@ export const monthlyClaimService = {
     }, 0);
   },
 
+  /** Payments recorded against a settlement; legacy payments without an amount count as the full total. */
+  async getSettlementPaid(
+    settlementId: string,
+    total: number,
+    db: DbClient = prisma,
+  ): Promise<number> {
+    const payments = await db.workEvent.findMany({
+      where: {
+        parentEventId: settlementId,
+        eventType: WorkEventType.PAYMENT_RECEIVED,
+        voidedAt: null,
+      },
+    });
+    let paid = 0;
+    for (const payment of payments) {
+      const amount = (payment.payload as { amount?: number }).amount;
+      if (amount == null) return total;
+      paid += amount;
+    }
+    return Math.round(paid * 100) / 100;
+  },
+
+  async getSettlementSummary(
+    settlementId: string,
+    db: DbClient = prisma,
+  ): Promise<SettlementSummary> {
+    const [status, total] = await Promise.all([
+      claimStatusService.getStatus(settlementId),
+      this.getSettlementTotal(settlementId, db),
+    ]);
+    if (status === ClaimStatus.VOIDED) {
+      return { status, total, paid: 0, outstanding: 0, shortPaid: 0 };
+    }
+    const paid = await this.getSettlementPaid(settlementId, total, db);
+    const outstanding = Math.max(0, Math.round((total - paid) * 100) / 100);
+    return {
+      status,
+      total,
+      paid,
+      outstanding,
+      shortPaid: status === ClaimStatus.PAID ? outstanding : 0,
+    };
+  },
+
+  /** Date and note (bill no., amount) for each status step, for the stepper. */
+  async getStepDetails(settlementId: string) {
+    const events = await prisma.workEvent.findMany({
+      where: {
+        parentEventId: settlementId,
+        voidedAt: null,
+        eventType: {
+          in: [
+            WorkEventType.BILL_SUBMITTED,
+            WorkEventType.CLAIM_PASSED,
+            WorkEventType.PAYMENT_RECEIVED,
+          ],
+        },
+      },
+      orderBy: { recordedAt: "asc" },
+    });
+    const details: Partial<Record<ClaimStatus, { date?: string; note?: string }>> = {};
+    for (const event of events) {
+      const p = event.payload as {
+        to?: ClaimStatus;
+        billNumber?: string;
+        amount?: number;
+        paymentReference?: string;
+      };
+      if (!p.to) continue;
+      const notes = [
+        p.billNumber ? `Bill ${p.billNumber}` : null,
+        p.to === ClaimStatus.PAID && p.amount != null ? `₹${p.amount.toLocaleString("en-IN")} received` : null,
+        p.paymentReference ?? null,
+      ].filter(Boolean);
+      details[p.to] = {
+        date: formatDate(event.occurredAt),
+        note: notes.join(" · ") || undefined,
+      };
+    }
+    return details;
+  },
+
   async getSettlementChildren(settlementId: string, db: DbClient = prisma) {
     return db.workEvent.findMany({
       where: {
@@ -175,18 +268,18 @@ export const monthlyClaimService = {
 
     const result = [];
     for (const settlement of settlements) {
-      const status = await claimStatusService.getStatus(settlement.id);
-      const total = await this.getSettlementTotal(settlement.id);
+      const summary = await this.getSettlementSummary(settlement.id);
       const children = await this.getSettlementChildren(settlement.id);
+      const unsettled =
+        summary.status !== ClaimStatus.PAID || summary.shortPaid > 0;
       if (
-        status !== ClaimStatus.PAID &&
-        status !== ClaimStatus.VOIDED &&
+        unsettled &&
+        summary.status !== ClaimStatus.VOIDED &&
         children.length > 0
       ) {
         result.push({
           ...settlement,
-          status,
-          total,
+          ...summary,
           childCount: children.length,
         });
       }
@@ -229,14 +322,24 @@ export const monthlyClaimService = {
     const passedSettlements: PassedAwaitingSettlement[] = [];
 
     for (const settlement of settlements) {
-      const status = await claimStatusService.getStatus(settlement.id);
-      const total = await this.getSettlementTotal(settlement.id);
+      const { status, paid, outstanding } = await this.getSettlementSummary(
+        settlement.id,
+      );
       const children = await this.getSettlementChildren(settlement.id);
       if (children.length === 0) continue;
 
       const settlementYear = settlement.occurredAt.getFullYear();
       if (settlementYear === year) {
-        byStatus = addToStatusBreakdown(byStatus, status, total);
+        if (status === ClaimStatus.PAID) {
+          // Count what was received; any shortfall shows under "Claims due".
+          byStatus = addToStatusBreakdown(byStatus, status, paid);
+        } else {
+          // A reopened month is part paid, part waiting on a supplementary bill.
+          byStatus = addToStatusBreakdown(byStatus, status, outstanding);
+          if (paid > 0) {
+            byStatus = addToStatusBreakdown(byStatus, ClaimStatus.PAID, paid);
+          }
+        }
       }
 
       if (status === ClaimStatus.PASSED) {
@@ -244,7 +347,7 @@ export const monthlyClaimService = {
           id: settlement.id,
           title: settlement.title,
           domain: settlement.domain as ClaimSettlementDomain,
-          total,
+          total: outstanding,
           childCount: children.length,
           status,
         });
@@ -267,8 +370,12 @@ export const monthlyClaimService = {
     };
   },
 
+  /**
+   * A new entry in an already-paid month needs a supplementary bill: move the
+   * settlement back to DRAFT with a status event so the replay sees it.
+   */
   async reopenIfPaid(settlementId: string, db: DbClient = prisma) {
-    const status = await claimStatusService.getStatus(settlementId);
+    const status = await claimStatusService.getStatus(settlementId, db);
     if (status !== ClaimStatus.PAID) return;
 
     const settlement = await db.workEvent.findFirst({
@@ -276,14 +383,28 @@ export const monthlyClaimService = {
     });
     if (!settlement) return;
 
+    await db.workEvent.create({
+      data: {
+        userId: settlement.userId,
+        eventType: WorkEventType.STATUS_CHANGED,
+        domain: "META",
+        occurredAt: new Date(),
+        title: "Status → DRAFT (new entry after payment)",
+        parentEventId: settlementId,
+        payload: {
+          from: ClaimStatus.PAID,
+          to: ClaimStatus.DRAFT,
+          claimEventId: settlementId,
+          reason: "supplementary",
+        },
+      },
+    });
+
     const existingPayload = settlement.payload as Prisma.JsonObject;
     await db.workEvent.update({
       where: { id: settlementId },
       data: {
-        payload: {
-          ...existingPayload,
-          currentStatus: ClaimStatus.DRAFT,
-        },
+        payload: { ...existingPayload, currentStatus: ClaimStatus.DRAFT },
       },
     });
   },
