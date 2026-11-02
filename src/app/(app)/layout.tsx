@@ -23,10 +23,10 @@ export default async function AppLayout({
     <div className="flex min-h-screen overflow-x-hidden">
       <AppSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur">
+        <header className="sticky top-0 z-30 print:hidden border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur">
           <CommandPalette />
         </header>
-        <main className="min-w-0 flex-1 overflow-x-hidden p-4 pb-24 lg:pb-6">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-hidden p-4 pb-36 lg:pb-24">{children}</main>
         <QuickAddFab />
         <BottomNav />
       </div>

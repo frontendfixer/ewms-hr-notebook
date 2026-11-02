@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Plus,
   Palmtree,
@@ -25,11 +26,16 @@ const quickActions: Array<{
   { href: "/add/cr", label: "Add CR", icon: CirclePlus, domain: "CR" },
   { href: "/add/night-duty", label: "Night Duty", icon: Moon, domain: "NIGHT_DUTY" },
   { href: "/add/travel", label: "Travel", icon: Train, domain: "TRAVEL" },
-  { href: "/add/payment", label: "Payment", icon: Wallet },
+  { href: "/claims", label: "Update a claim", icon: Wallet },
 ];
+
+/** Pages where the button would only cover content: forms and statements. */
+const HIDDEN_ON = ["/add/", "/reports"];
 
 export function QuickAddFab() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  if (HIDDEN_ON.some((prefix) => pathname.startsWith(prefix))) return null;
 
   return (
     <>
@@ -39,7 +45,7 @@ export function QuickAddFab() {
           onClick={() => setOpen(false)}
         />
       )}
-      <div className="fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2 lg:bottom-6">
+      <div className="fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2 print:hidden lg:bottom-6">
         {open && (
           <div className="mb-2 flex flex-col gap-1 rounded-2xl border border-border/60 bg-card p-2 shadow-lg">
             <p className="px-3 py-1 text-xs font-medium text-muted-foreground">Record</p>

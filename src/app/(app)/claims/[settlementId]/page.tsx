@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUserId } from "@/lib/auth-server";
 import { prisma } from "@/lib/db";
-import { claimStatusService } from "@/lib/services/claim-status-service";
 import { monthlyClaimService } from "@/lib/services/monthly-claim-service";
 import { StatusTimeline } from "@/components/status/status-timeline";
 import { EventCard } from "@/components/timeline/event-card";
@@ -33,11 +32,13 @@ export default async function SettlementDetailPage({
 
   if (!settlement) notFound();
 
-  const [status, total, children] = await Promise.all([
-    claimStatusService.getStatus(settlement.id),
-    monthlyClaimService.getSettlementTotal(settlement.id),
+  const [summary, children, stepDetails] = await Promise.all([
+    monthlyClaimService.getSettlementSummary(settlement.id),
     monthlyClaimService.getSettlementChildren(settlement.id),
+    monthlyClaimService.getStepDetails(settlement.id),
   ]);
+  const { status, total } = summary;
+  const { year, month } = settlement.payload as { year: number; month: number };
 
   const entryLabel =
     settlement.domain === "TRAVEL"
@@ -64,6 +65,23 @@ export default async function SettlementDetailPage({
           <span className="text-sm text-muted-foreground">{entryLabel}</span>
           <span className="text-sm font-medium">{formatCurrency(total)}</span>
         </div>
+        {summary.paid > 0 && (
+          <p className="mt-2 text-sm">
+            Received {formatCurrency(summary.paid)}
+            {summary.outstanding > 0 && (
+              <span className="font-medium text-destructive">
+                {" "}
+                · {formatCurrency(summary.outstanding)} still due
+              </span>
+            )}
+          </p>
+        )}
+        <Link
+          href={`/reports?month=${year}-${String(month).padStart(2, "0")}`}
+          className="mt-2 inline-block text-sm font-medium text-primary hover:underline"
+        >
+          Statement for this month →
+        </Link>
       </div>
 
       <Card>
@@ -74,6 +92,9 @@ export default async function SettlementDetailPage({
           <StatusTimeline
             claimEventId={settlement.id}
             currentStatus={status}
+            outstanding={summary.outstanding}
+            shortPaid={summary.shortPaid}
+            stepDetails={stepDetails}
           />
         </CardContent>
       </Card>

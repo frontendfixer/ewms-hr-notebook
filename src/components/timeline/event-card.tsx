@@ -32,6 +32,7 @@ export async function EventCard({
     expiresAt?: string;
     currentStatus?: string;
     purpose?: string;
+    days?: number;
   };
 
   let statusBadge = null;

@@ -102,12 +102,8 @@ export const insightService = {
       },
     });
     for (const settlement of monthSettlements) {
-      const status = await claimStatusService.getStatus(settlement.id);
-      if (status !== ClaimStatus.PAID && status !== ClaimStatus.VOIDED) {
-        thisMonth.pendingAmount += await monthlyClaimService.getSettlementTotal(
-          settlement.id,
-        );
-      }
+      const summary = await monthlyClaimService.getSettlementSummary(settlement.id);
+      thisMonth.pendingAmount += summary.outstanding;
     }
 
     const orphanClaims = await prisma.workEvent.findMany({
@@ -149,23 +145,5 @@ export const insightService = {
       avgNightDutyPerMonth,
       yearToDate,
     };
-  },
-
-  async getMonthlyReport(userId: string, year: number, month: number) {
-    const start = new Date(year, month - 1, 1);
-    const end = new Date(year, month, 0, 23, 59, 59);
-    const events = await prisma.workEvent.findMany({
-      where: {
-        userId,
-        voidedAt: null,
-        occurredAt: { gte: start, lte: end },
-      },
-    });
-
-    const byDomain: Record<string, number> = {};
-    for (const e of events) {
-      byDomain[e.domain] = (byDomain[e.domain] ?? 0) + 1;
-    }
-    return { events, byDomain, start, end };
   },
 };

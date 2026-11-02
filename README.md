@@ -27,6 +27,9 @@ Open [http://localhost:3000](http://localhost:3000). Sign in with Google, comple
 
 ### Environment variables
 
+The server must run in UTC (`TZ=UTC`, set by the `dev`/`start`/`test` scripts):
+date-only values are stored as UTC midnight and shown in IST.
+
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | MySQL connection string |
@@ -64,7 +67,7 @@ Business logic lives in `src/lib/services/`. Server actions are in `src/actions/
 | `/timeline/[eventId]` | Event detail, claim stepper, ledger impact, void |
 | `/claims` | Pending night-duty and travel claims (₹ total) |
 | `/records/[type]` | Filtered lists: `all`, `cr`, `leave`, `night`, `ta` |
-| `/reports` | Monthly domain chart, year stats, CSV export |
+| `/reports` | Monthly NDA / TA / CR / leave statements, FY totals, print, CSV |
 | `/reports/insights` | Personal insights (Sundays worked, avg night duty, top destination) |
 | `/search` | Full-text search on title/remarks (`?q=`) |
 | `/settings` | Theme, pay & allowance settings |
@@ -89,19 +92,39 @@ Business logic lives in `src/lib/services/`. Server actions are in `src/actions/
 |--------|------|------|-------------|
 | `GET` | `/api/health` | No | Health check (includes DB ping) |
 | `GET` | `/api/feed` | Yes | Home feed JSON (`feed`, `balances`) |
-| `GET` | `/api/export/monthly` | Yes | CSV export of current month domain counts |
+| `GET` | `/api/export/monthly?kind=nda\|ta\|cr\|leave&month=YYYY-MM` | Yes | CSV statement for a month |
 | `*` | `/api/auth/[...all]` | — | Better Auth (sessions, OAuth) |
 
 ## Server actions
 
-`recordHolidayWork`, `recordLeave`, `recordNightDuty`, `recordTravel`, `transitionClaimStatus`, `voidEvent`, `updateProfile`, `completeOnboarding`, `addHoliday`, `updatePaySettings`
+`recordHolidayWork`, `recordLeave`, `adjustLeaveBalances`, `recordNightDuty`, `recordTravel`, `transitionClaimStatus`, `revertClaimStatus`, `voidEvent`, `updateProfile`, `completeOnboarding`, `addHoliday`, `deleteHoliday`, `addNationalHolidays`, `updatePaySettings`
 
-## Allowance formulas
+Actions return `{ ok: true } | { ok: false, error }` instead of throwing: Next.js
+hides thrown messages in production builds.
 
-- **DA:** `basicPay × daPercent / 100`
-- **NDA per night:** `(basicPay + DA) / 200`
-- **TA:** `taBaseAmount × claimPercent / 100` (default base ₹625)
-- **CR expiry:** configurable, default 90 days from work date
+## Allowance and leave rules
+
+Pure rule code lives in `src/lib/calculations/` (unit-tested). Sources are cited in
+the file headers; re-check them when Railway Board issues new orders.
+
+- **DA:** official 7th CPC rate by date (`DA_RATE_HISTORY`, 60% from 1 Jan 2026);
+  a per-user override covers orders not yet in the table.
+- **NDA** (RBE 36/2018, 83/2020, 85/2022): hourly rate `(Basic + DA) / 200`, basic
+  capped at ₹43,600; paid for 10 minutes of weightage per hour worked between
+  22:00 and 06:00 (a full night = 1 h 20 min × hourly rate). Pay Level 7 and below.
+- **TA (daily allowance):** 7th CPC rate by pay level (₹500/800/900/1000/1200),
+  +25% each time DA crosses a multiple of 50% (RBE 51/2024). Each calendar day away
+  from HQ is charged by hours absent: up to 6 h 30%, 6–12 h 70%, over 12 h 100%;
+  nothing within 8 km of HQ.
+- **CR:** earned for work on a Sunday, saved holiday or declared rostered rest day
+  (full or half day); valid for a configurable number of days (default 90).
+  CR leave consumes credits oldest-expiry first, valid on the leave date.
+- **Leave:** CL and CR leave skip Sundays and holidays inside the spell. CL resets
+  each 1 Jan (8 days by default); LAP +15 and LHAP +10 on 1 Jan and 1 Jul, LAP
+  capped at 300. Balances cannot go negative and spells cannot overlap.
+- **Claims:** night duty and travel are grouped into one claim per month:
+  Not yet billed → Bill submitted → Passed → Paid. The amount received is recorded,
+  so short payments and entries added after payment stay visible.
 
 ## Project structure
 

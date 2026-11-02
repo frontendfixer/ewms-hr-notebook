@@ -1,11 +1,20 @@
 import { requireUserId } from "@/lib/auth-server";
+import { prisma } from "@/lib/db";
 import { ledgerService } from "@/lib/services/ledger-service";
+import { leaveAccrualService } from "@/lib/services/leave-accrual-service";
+import { leaveDayKey } from "@/lib/calculations/leave";
 import { LeaveWizard } from "@/components/flows/leave-wizard";
 import { Suspense } from "react";
 
 async function LeaveForm() {
   const userId = await requireUserId();
-  const credits = await ledgerService.getAvailableCrCredits(userId);
+  await leaveAccrualService.ensureAccruals(userId);
+  const [credits, balances, holidays] = await Promise.all([
+    // Include credits that may still be valid for a leave dated later.
+    ledgerService.getAvailableCrCredits(userId),
+    ledgerService.getBalances(userId),
+    prisma.publicHoliday.findMany({ where: { userId }, select: { date: true } }),
+  ]);
   return (
     <Suspense fallback={<p className="p-4">Loading...</p>}>
       <LeaveWizard
@@ -14,6 +23,12 @@ async function LeaveForm() {
           expiresAt: c.expiresAt?.toISOString() ?? null,
           earnedAt: c.earnedAt?.toISOString() ?? null,
         }))}
+        balances={{
+          CL: balances.LEAVE_CL ?? 0,
+          LAP: balances.LEAVE_LAP ?? 0,
+          LHAP: balances.LEAVE_LHAP ?? 0,
+        }}
+        holidays={holidays.map((h) => leaveDayKey(h.date))}
       />
     </Suspense>
   );

@@ -99,19 +99,35 @@ export const DOMAIN_DOT_COLORS: Record<EventDomain, string> = {
   META: DOMAIN_STYLES.META.dot,
 };
 
+/**
+ * Validity of a CR credit. No single Railway Board limit was found; set this to
+ * what your office allows (Hours of Work rules require compensatory rest for
+ * exempted staff within 14 days).
+ */
 export const DEFAULT_CR_EXPIRY_DAYS = 90;
-export const DEFAULT_TA_BASE_AMOUNT = 625;
 export const SETTING_KEYS = {
   CR_EXPIRY_DAYS: "crExpiryDays",
   CL_ENTITLEMENT: "clEntitlement",
-  EL_ENTITLEMENT: "elEntitlement",
   BASIC_PAY: "basicPay",
-  DA_PERCENT: "daPercent",
-  TA_BASE_AMOUNT: "taBaseAmount",
+  PAY_LEVEL: "payLevel",
+  /** Blank = use the official DA rate for each date. */
+  DA_PERCENT_OVERRIDE: "daPercentOverride",
+  /** Blank = derive the daily allowance from pay level and DA. */
+  TA_RATE_OVERRIDE: "taRateOverride",
+  AUTO_LEAVE_CREDITS: "autoLeaveCredits",
 } as const;
 
+export const LEDGER_ACCOUNT_LABELS: Record<string, string> = {
+  CR_CREDIT: "CR",
+  LEAVE_CL: "Casual leave",
+  LEAVE_LAP: "LAP",
+  LEAVE_LHAP: "LHAP",
+  LEAVE_COMMUTED: "Commuted leave",
+  LEAVE_SPECIAL_CL: "Special CL",
+};
+
 export const CLAIM_STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Pending",
+  DRAFT: "Not yet billed",
   BILL_SUBMITTED: "Bill Submitted",
   PASSED: "Passed",
   PAID: "Paid",

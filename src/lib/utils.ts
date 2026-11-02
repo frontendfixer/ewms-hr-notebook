@@ -13,11 +13,25 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/** Currency with paise, for statements where per-entry amounts must add up. */
+export function formatCurrencyExact(amount: number): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+/** All user-facing dates are shown in Indian Standard Time. */
+export const APP_TIME_ZONE = "Asia/Kolkata";
+
 export function formatDate(date: Date | string): string {
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: APP_TIME_ZONE,
   }).format(new Date(date));
 }
 
@@ -25,6 +39,7 @@ export function formatShortDate(date: Date | string): string {
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
     month: "short",
+    timeZone: APP_TIME_ZONE,
   }).format(new Date(date));
 }
 

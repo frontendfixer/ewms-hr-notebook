@@ -5,7 +5,7 @@ import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { updateProfile } from "@/actions/events";
-import { toast } from "sonner";
+import { toastResult } from "@/lib/action-toast";
 
 type ProfileFormProps = {
   name: string;
@@ -28,14 +28,8 @@ export function ProfileForm({
       className="space-y-4"
       action={(formData) => {
         startTransition(async () => {
-          try {
-            await updateProfile(formData);
-            toast.success("Profile saved");
+          if (toastResult(await updateProfile(formData), "Profile saved")) {
             router.refresh();
-          } catch (error) {
-            toast.error(
-              error instanceof Error ? error.message : "Failed to save profile",
-            );
           }
         });
       }}

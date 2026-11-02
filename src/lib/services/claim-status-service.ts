@@ -1,5 +1,7 @@
-import { ClaimStatus, WorkEventType } from "@/generated/prisma/client";
+import { ClaimStatus, Prisma, WorkEventType } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+
+type DbClient = Prisma.TransactionClient | typeof prisma;
 
 const CLAIM_RECORD_TYPES = new Set<WorkEventType>([
   WorkEventType.NIGHT_DUTY_RECORDED,
@@ -7,10 +9,13 @@ const CLAIM_RECORD_TYPES = new Set<WorkEventType>([
 ]);
 
 export const claimStatusService = {
-  async getStatus(claimEventId: string): Promise<ClaimStatus> {
-    const root = await prisma.workEvent.findFirst({
+  async getStatus(
+    claimEventId: string,
+    db: DbClient = prisma,
+  ): Promise<ClaimStatus> {
+    const root = await db.workEvent.findFirst({
       where: { id: claimEventId, voidedAt: null },
-      select: { id: true, eventType: true, parentEventId: true },
+      select: { id: true, eventType: true, parentEventId: true, recordedAt: true },
     });
     if (!root) return ClaimStatus.VOIDED;
 
@@ -18,14 +23,30 @@ export const claimStatusService = {
       CLAIM_RECORD_TYPES.has(root.eventType) &&
       root.parentEventId
     ) {
-      return this.getStatus(root.parentEventId);
+      const monthStatus = await this.getStatus(root.parentEventId, db);
+      if (monthStatus === ClaimStatus.PAID) return monthStatus;
+      // A month reopened for a supplementary bill: entries that were already
+      // in it when it was paid stay paid.
+      const paidAfter = await db.workEvent.findFirst({
+        where: {
+          parentEventId: root.parentEventId,
+          eventType: WorkEventType.PAYMENT_RECEIVED,
+          voidedAt: null,
+          recordedAt: { gt: root.recordedAt },
+        },
+        select: { id: true },
+      });
+      return paidAfter ? ClaimStatus.PAID : monthStatus;
     }
 
-    return this.replayStatus(root.id);
+    return this.replayStatus(root.id, db);
   },
 
-  async replayStatus(claimEventId: string): Promise<ClaimStatus> {
-    const children = await prisma.workEvent.findMany({
+  async replayStatus(
+    claimEventId: string,
+    db: DbClient = prisma,
+  ): Promise<ClaimStatus> {
+    const children = await db.workEvent.findMany({
       where: {
         OR: [{ id: claimEventId }, { parentEventId: claimEventId }],
         voidedAt: null,

@@ -36,19 +36,20 @@ Personal Indian Railways HR notebook replacing a paper workbook. Event-first bac
 | Home feed | CR expiry reminders, pending claim alerts, upcoming holiday, recent activity |
 | Balance strip | CR credits, leave balances (CL/LAP/LHAP), pending ₹ |
 | FAB quick-add | Take Leave, Add CR, Night Duty, Travel, Payment (→ Claims) |
-| Leave wizard | 14 leave types, date range, half-day, FIFO CR consumption with SPECIAL_CL |
-| CR recording | Holiday/Sunday work → `HOLIDAY_WORK_RECORDED` + `CR_CREDIT_ISSUED` |
-| Night duty | Multi-day range, NDA preview from pay settings |
-| Travel allowance | Destination, claim %, TA preview |
-| Claims workflow | DRAFT → BILL_SUBMITTED → PASSED → PAID vertical stepper |
+| Leave wizard | Live day count (Sundays/holidays skipped for CL & CR), balance check, overlap check, half-day for single dates, CR credits matched to days |
+| Leave credits | CL reset each 1 Jan; LAP +15 / LHAP +10 each 1 Jan & 1 Jul (LAP cap 300) |
+| CR recording | Sunday / holiday / rostered rest day, full or half day |
+| Night duty | Duty times, 22:00–06:00 window, 10-min weightage, ₹43,600 ceiling, DA by date |
+| Travel allowance | Departure/return times → per-day 30/70/100% slab, rate by pay level |
+| Claims workflow | Monthly claim stepper with bill no., amount received, short-payment and undo |
 | Timeline | Chronological cards, domain/period filters, event detail |
 | Calendar | Month view with domain dots, day detail panel |
 | Records | Filtered lists by domain (all, CR, leave, night, travel) |
 | Search | Cmd+K command palette + `/search` page (title/remarks) |
-| Reports | Monthly domain bar chart, year stats, CSV export |
+| Reports | Monthly NDA/TA/CR/leave statements, FY totals, print/PDF, CSV per statement |
 | Insights | Sundays worked, avg night duty/month, top destination |
 | Settings | Theme (light/dark/system), pay settings, CR expiry days |
-| Public holidays | Per-user holiday list for CR detection |
+| Public holidays | Per-user list (add/remove, one-tap national holidays) for CR and CL counting |
 | Profile | Name, personnel no., designation, department |
 | Event voiding | Recursive void with compensating ledger entries |
 | PWA | Installable standalone app (production builds) |
@@ -62,5 +63,4 @@ Personal Indian Railways HR notebook replacing a paper workbook. Event-first bac
 | `CR_EXPIRED` events | Expiry enforced via `expiresAt` on ledger entries |
 | `LEAVE_CONVERSION` | Event type defined, no handler |
 | `NOTE_AMENDED` | Event type defined, no handler |
-| `EmployeeCategory` | Schema enum; not in profile form |
-| Sign-out | No sign-out UI |
+| `EmployeeCategory` | Schema enum; pay level is stored as a setting instead |

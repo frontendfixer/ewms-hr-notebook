@@ -5,7 +5,7 @@ import { useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { voidEvent } from "@/actions/events";
-import { toast } from "sonner";
+import { toastResult } from "@/lib/action-toast";
 import { cn } from "@/lib/utils";
 
 type DeleteEventButtonProps = {
@@ -37,16 +37,12 @@ export function DeleteEventButton({
     }
 
     startTransition(async () => {
-      try {
-        await voidEvent(eventId, "Deleted by user");
-        toast.success("Entry deleted");
-        if (redirectTo) {
-          router.push(redirectTo);
-        } else {
-          router.refresh();
-        }
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to delete");
+      const result = await voidEvent(eventId, "Deleted by user");
+      if (!toastResult(result, "Entry deleted")) return;
+      if (redirectTo) {
+        router.push(redirectTo);
+      } else {
+        router.refresh();
       }
     });
   };

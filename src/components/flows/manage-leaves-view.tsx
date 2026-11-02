@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { adjustLeaveBalances } from "@/actions/events";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { toast } from "sonner";
+import { toastResult } from "@/lib/action-toast";
 import { Award, ChevronRight, Palmtree, Plus } from "lucide-react";
 
 type ManageLeavesViewProps = {
@@ -95,26 +95,22 @@ export function ManageLeavesView({ balances }: ManageLeavesViewProps) {
         </CardHeader>
         <CardContent>
           <p className="mb-4 text-sm text-muted-foreground">
-            Set your current CL, LAP, and LHAP balances. Only these three types
-            deduct from your leave balance when you take leave. CR is managed
-            separately through holiday work.
+            Set your current CL, LAP and LHAP balances as shown in HRMS. Use this
+            to correct differences; the balances you enter are taken as on today
+            and automatic credits continue from here.
           </p>
           <form
             action={async (fd) => {
-              try {
-                await adjustLeaveBalances(fd);
-                toast.success("Leave balances updated");
-                router.refresh();
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Failed");
-              }
+              const result = await adjustLeaveBalances(fd);
+              if (toastResult(result, "Leave balances updated")) router.refresh();
             }}
             className="space-y-4"
           >
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <Label>CL balance (days)</Label>
+                <Label htmlFor="clBalance">CL balance (days)</Label>
                 <Input
+                  id="clBalance"
                   name="clBalance"
                   type="number"
                   step="0.5"
@@ -124,8 +120,9 @@ export function ManageLeavesView({ balances }: ManageLeavesViewProps) {
                 />
               </div>
               <div>
-                <Label>LAP balance (days)</Label>
+                <Label htmlFor="lapBalance">LAP balance (days)</Label>
                 <Input
+                  id="lapBalance"
                   name="lapBalance"
                   type="number"
                   step="0.5"
@@ -135,8 +132,9 @@ export function ManageLeavesView({ balances }: ManageLeavesViewProps) {
                 />
               </div>
               <div>
-                <Label>LHAP balance (days)</Label>
+                <Label htmlFor="lhapBalance">LHAP balance (days)</Label>
                 <Input
+                  id="lhapBalance"
                   name="lhapBalance"
                   type="number"
                   step="0.5"
@@ -147,17 +145,18 @@ export function ManageLeavesView({ balances }: ManageLeavesViewProps) {
               </div>
             </div>
             <div>
-              <Label>Reason (optional)</Label>
+              <Label htmlFor="adjust-reason">Reason (optional)</Label>
               <Textarea
+                id="adjust-reason"
                 name="reason"
                 rows={2}
                 placeholder="e.g. Annual credit, correction after audit"
               />
             </div>
-            <Button type="submit" className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
+            <SubmitButton className="w-full sm:w-auto">
+              <Plus className="h-4 w-4" />
               Save balances
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>

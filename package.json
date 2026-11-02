@@ -4,15 +4,15 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "TZ=UTC next dev",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "TZ=UTC next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "backfill:settlements": "bun run scripts/backfill-monthly-settlements.ts",
-    "test": "vitest run"
+    "test": "TZ=UTC vitest run"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
