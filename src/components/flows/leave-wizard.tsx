@@ -31,7 +31,7 @@ type CrCredit = {
   earnedAt: string | null;
 };
 
-type LeaveSelection = "USE_CR" | LeaveType;
+export type LeaveSelection = "USE_CR" | LeaveType;
 
 type LeaveBalances = Partial<Record<LeaveType, number>>;
 
@@ -46,25 +46,42 @@ export function LeaveWizard({
   credits,
   balances,
   holidays,
+  edit,
 }: {
   credits: CrCredit[];
   balances: LeaveBalances;
   /** `yyyy-MM-dd` keys of saved holidays. */
   holidays: string[];
+  /**
+   * Pre-fills the form to replace an existing leave. `credits` and `balances`
+   * should then already include what that leave used.
+   */
+  edit?: {
+    eventId: string;
+    selection: LeaveSelection;
+    startDate: string;
+    endDate: string;
+    duration: LeaveDurationValue;
+    reason: string | null;
+    crCreditEventIds: string[];
+  };
 }) {
   const router = useRouter();
   const params = useSearchParams();
   const initialSelection: LeaveSelection =
-    params.get("mode") === "cr" || params.get("usesCr") === "1"
+    edit?.selection ??
+    (params.get("mode") === "cr" || params.get("usesCr") === "1"
       ? "USE_CR"
-      : "CL";
+      : "CL");
   const preCr = params.get("cr");
 
   const [selection, setSelection] = useState<LeaveSelection>(initialSelection);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [duration, setDuration] = useState<LeaveDurationValue>("FULL");
-  const [preferred, setPreferred] = useState<string[]>(preCr ? [preCr] : []);
+  const [startDate, setStartDate] = useState(edit?.startDate ?? "");
+  const [endDate, setEndDate] = useState(edit?.endDate ?? "");
+  const [duration, setDuration] = useState<LeaveDurationValue>(edit?.duration ?? "FULL");
+  const [preferred, setPreferred] = useState<string[]>(
+    edit?.crCreditEventIds ?? (preCr ? [preCr] : []),
+  );
   const usesCr = selection === "USE_CR";
   const leaveType: LeaveType = usesCr ? "SPECIAL_CL" : selection;
 
@@ -105,16 +122,18 @@ export function LeaveWizard({
   return (
     <Card className="mx-auto max-w-lg">
       <CardHeader>
-        <CardTitle>Take Leave</CardTitle>
+        <CardTitle>{edit ? "Edit Leave" : "Take Leave"}</CardTitle>
       </CardHeader>
       <CardContent>
         <form
           action={async (fd) => {
             const result = await recordLeave(fd);
-            if (toastResult(result, "Leave recorded")) router.push("/records/leave");
+            if (!toastResult(result, edit ? "Leave updated" : "Leave recorded")) return;
+            router.push(edit ? `/timeline/${result.data?.id}` : "/records/leave");
           }}
           className="space-y-4"
         >
+          {edit && <input type="hidden" name="replacesEventId" value={edit.eventId} />}
           <input type="hidden" name="leaveType" value={leaveType} />
           <input type="hidden" name="usesCr" value={usesCr ? "true" : "false"} />
           <input type="hidden" name="duration" value={effectiveDuration} />
@@ -188,6 +207,8 @@ export function LeaveWizard({
               endName="endDate"
               required
               placeholder="Pick leave dates"
+              defaultStart={edit?.startDate}
+              defaultEnd={edit?.endDate}
               closeOnSelect={false}
               onRangeChange={(s, e) => {
                 setStartDate(s);
@@ -318,14 +339,19 @@ export function LeaveWizard({
 
           <div>
             <Label htmlFor="leave-reason">Reason</Label>
-            <Textarea id="leave-reason" name="reason" rows={2} />
+            <Textarea
+              id="leave-reason"
+              name="reason"
+              rows={2}
+              defaultValue={edit?.reason ?? undefined}
+            />
           </div>
           <SubmitButton
             className="w-full"
-            pendingLabel="Submitting…"
+            pendingLabel={edit ? "Saving…" : "Submitting…"}
             disabled={!count || count.days === 0 || insufficient || (usesCr && credits.length === 0)}
           >
-            Submit Leave
+            {edit ? "Save changes" : "Submit Leave"}
           </SubmitButton>
         </form>
       </CardContent>

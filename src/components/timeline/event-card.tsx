@@ -6,6 +6,7 @@ import { claimStatusService } from "@/lib/services/claim-status-service";
 import { eventService } from "@/lib/services/event-service";
 import { formatEventCardDisplay } from "@/lib/event-card-display";
 import { requireUserId } from "@/lib/auth-server";
+import { editLockReason } from "@/lib/edit-rules";
 
 type EventCardProps = {
   id: string;
@@ -36,12 +37,13 @@ export async function EventCard({
   };
 
   let statusBadge = null;
+  let claimStatus: string | null = null;
   if (
     eventType === "NIGHT_DUTY_RECORDED" ||
     eventType === "TRAVEL_RECORDED"
   ) {
-    const status = await claimStatusService.getStatus(id);
-    statusBadge = claimStatusBadge(status);
+    claimStatus = await claimStatusService.getStatus(id);
+    statusBadge = claimStatusBadge(claimStatus);
   }
 
   let leaveAppliedAt: Date | null = null;
@@ -74,6 +76,13 @@ export async function EventCard({
       statusBadge={statusBadge}
       amount={showAmount}
       purpose={purpose}
+      editable={
+        editLockReason({
+          eventType,
+          claimStatus,
+          crUsedBy: leaveAppliedAt ? "a leave" : null,
+        }) === null
+      }
     />
   );
 }

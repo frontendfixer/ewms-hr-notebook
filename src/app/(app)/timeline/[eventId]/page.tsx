@@ -3,6 +3,9 @@ import { notFound, redirect } from "next/navigation";
 import { requireUserId } from "@/lib/auth-server";
 import { prisma } from "@/lib/db";
 import { claimStatusService } from "@/lib/services/claim-status-service";
+import { eventService } from "@/lib/services/event-service";
+import { isEditableEventType } from "@/lib/edit-rules";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeleteEventButton } from "@/components/timeline/delete-event-button";
 import { claimStatusBadge } from "@/components/ui/badge";
@@ -10,7 +13,7 @@ import { formatCurrencyExact, formatDate, cn } from "@/lib/utils";
 import { DOMAIN_LABELS, LEDGER_ACCOUNT_LABELS } from "@/lib/design-tokens";
 import { domainCardClass, domainLabelClass } from "@/lib/domain-styles";
 import { WorkEventType } from "@/generated/prisma/client";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Lock, Pencil } from "lucide-react";
 
 type ClaimPayload = {
   amount?: number;
@@ -93,6 +96,10 @@ export default async function EventDetailPage({
     event.parentEvent.eventType === WorkEventType.MONTHLY_CLAIM_SETTLEMENT
       ? event.parentEvent
       : null;
+
+  const editLock = isEditableEventType(event.eventType)
+    ? (await eventService.getEditTarget(userId, event.id)).reason
+    : undefined;
 
   const p = event.payload as ClaimPayload;
   const money = (n?: number) => (n != null ? formatCurrencyExact(n) : undefined);
@@ -226,7 +233,24 @@ export default async function EventDetailPage({
         </Card>
       )}
 
-      <DeleteEventButton eventId={event.id} redirectTo="/timeline" />
+      {editLock && (
+        <p className="flex items-start gap-2 text-sm text-muted-foreground">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+          {editLock}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {editLock === null && (
+          <Link
+            href={`/timeline/${event.id}/edit`}
+            className={buttonVariants({ variant: "outline" })}
+          >
+            <Pencil className="h-4 w-4" />
+            Edit entry
+          </Link>
+        )}
+        <DeleteEventButton eventId={event.id} redirectTo="/timeline" />
+      </div>
     </div>
   );
 }

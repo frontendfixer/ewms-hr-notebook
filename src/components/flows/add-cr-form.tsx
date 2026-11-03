@@ -15,14 +15,24 @@ type AddCrFormProps = {
   /** `yyyy-MM-dd` → holiday name */
   holidays: Record<string, string>;
   expiryDays: number;
+  /** Pre-fills the form to replace an existing entry. */
+  edit?: {
+    eventId: string;
+    workDate: string;
+    amount: number;
+    restDay: boolean;
+    remarks: string | null;
+  };
 };
 
-export function AddCrForm({ holidays, expiryDays }: AddCrFormProps) {
+export function AddCrForm({ holidays, expiryDays, edit }: AddCrFormProps) {
   const router = useRouter();
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const [workDate, setWorkDate] = useState(formatLocalDateValue(yesterday));
-  const [restDay, setRestDay] = useState(false);
+  const [workDate, setWorkDate] = useState(
+    edit?.workDate ?? formatLocalDateValue(yesterday),
+  );
+  const [restDay, setRestDay] = useState(edit?.restDay ?? false);
 
   const parsed = parseLocalDateValue(workDate);
   const isFuture = parsed != null && parsed > new Date();
@@ -37,7 +47,7 @@ export function AddCrForm({ holidays, expiryDays }: AddCrFormProps) {
   return (
     <Card className="mx-auto max-w-lg">
       <CardHeader>
-        <CardTitle>Add CR</CardTitle>
+        <CardTitle>{edit ? "Edit CR" : "Add CR"}</CardTitle>
         <p className="text-sm text-muted-foreground">
           Record work on a Sunday, holiday or your rostered rest day to earn
           compensatory rest.
@@ -47,10 +57,12 @@ export function AddCrForm({ holidays, expiryDays }: AddCrFormProps) {
         <form
           action={async (fd) => {
             const result = await recordHolidayWork(fd);
-            if (toastResult(result, "CR recorded")) router.push("/records/cr");
+            if (!toastResult(result, edit ? "CR updated" : "CR recorded")) return;
+            router.push(edit ? `/timeline/${result.data?.id}` : "/records/cr");
           }}
           className="space-y-4"
         >
+          {edit && <input type="hidden" name="replacesEventId" value={edit.eventId} />}
           <div>
             <Label>Work date</Label>
             <DatePicker
@@ -94,7 +106,7 @@ export function AddCrForm({ holidays, expiryDays }: AddCrFormProps) {
           )}
           <div>
             <Label htmlFor="cr-amount">CR earned</Label>
-            <Select id="cr-amount" name="amount" defaultValue="1">
+            <Select id="cr-amount" name="amount" defaultValue={String(edit?.amount ?? 1)}>
               <option value="1">Full day (1 CR)</option>
               <option value="0.5">Half day (0.5 CR)</option>
             </Select>
@@ -105,14 +117,20 @@ export function AddCrForm({ holidays, expiryDays }: AddCrFormProps) {
           </div>
           <div>
             <Label htmlFor="cr-remarks">Remarks</Label>
-            <Textarea id="cr-remarks" name="remarks" rows={2} placeholder="Work done, ordered by" />
+            <Textarea
+              id="cr-remarks"
+              name="remarks"
+              rows={2}
+              placeholder="Work done, ordered by"
+              defaultValue={edit?.remarks ?? undefined}
+            />
           </div>
           <SubmitButton
             className="w-full"
-            pendingLabel="Recording…"
+            pendingLabel={edit ? "Saving…" : "Recording…"}
             disabled={!parsed || isFuture || (!dayKind && !restDay)}
           >
-            Record
+            {edit ? "Save changes" : "Record"}
           </SubmitButton>
         </form>
       </CardContent>

@@ -81,6 +81,12 @@ function revalidateAll() {
 const nullableString = (v: FormDataEntryValue | null) =>
   v == null || v === "" ? undefined : v;
 
+/** Set by edit forms: the entry the submitted one replaces. */
+const replacesEventId = (formData: FormData) => {
+  const v = formData.get("replacesEventId");
+  return typeof v === "string" && v !== "" ? v : undefined;
+};
+
 export async function recordHolidayWork(formData: FormData) {
   return run(async () => {
     const userId = await requireUserId();
@@ -90,8 +96,13 @@ export async function recordHolidayWork(formData: FormData) {
       amount: formData.get("amount") ?? 1,
       remarks: nullableString(formData.get("remarks")),
     });
-    await eventService.recordHolidayWork(userId, parsed);
+    const { cr } = await eventService.recordHolidayWork(
+      userId,
+      parsed,
+      replacesEventId(formData),
+    );
     revalidateAll();
+    return { id: cr.id };
   });
 }
 
@@ -108,9 +119,13 @@ export async function recordLeave(formData: FormData) {
       usesCr: formData.get("usesCr") === "true",
       crCreditEventIds: crIds.length ? crIds : undefined,
     });
-    const leave = await eventService.recordLeave(userId, parsed);
+    const leave = await eventService.recordLeave(
+      userId,
+      parsed,
+      replacesEventId(formData),
+    );
     revalidateAll();
-    return { days: (leave.payload as { days?: number }).days ?? 0 };
+    return { id: leave.id, days: (leave.payload as { days?: number }).days ?? 0 };
   });
 }
 
@@ -138,9 +153,13 @@ export async function recordNightDuty(formData: FormData) {
       endTime: nullableString(formData.get("endTime")),
       remarks: nullableString(formData.get("remarks")),
     });
-    const created = await eventService.recordNightDuty(userId, parsed);
+    const created = await eventService.recordNightDuty(
+      userId,
+      parsed,
+      replacesEventId(formData),
+    );
     revalidateAll();
-    return { count: created.length };
+    return { id: created[0]?.id, count: created.length };
   });
 }
 
@@ -162,8 +181,13 @@ export async function recordTravel(formData: FormData) {
           : undefined,
       remarks: nullableString(formData.get("remarks")),
     });
-    await eventService.recordTravel(userId, parsed);
+    const event = await eventService.recordTravel(
+      userId,
+      parsed,
+      replacesEventId(formData),
+    );
     revalidateAll();
+    return { id: event.id };
   });
 }
 

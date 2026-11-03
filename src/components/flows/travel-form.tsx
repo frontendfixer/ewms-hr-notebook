@@ -21,17 +21,40 @@ type TravelFormProps = {
   payLevel: number | null;
   daPercentOverride: number | null;
   taRateOverride: number | null;
+  /** Pre-fills the form to replace an existing journey. */
+  edit?: {
+    eventId: string;
+    journeyDate: string;
+    /** Empty when the return was on the journey date. */
+    returnDate: string;
+    departureTime: string;
+    returnTime: string;
+    from: string;
+    to: string;
+    purpose: string;
+    beyond8Km: boolean;
+    /** Set when the claim % was entered by hand. */
+    manualPercent: number | null;
+    remarks: string | null;
+  };
 };
 
-export function TravelForm({ payLevel, daPercentOverride, taRateOverride }: TravelFormProps) {
+export function TravelForm({
+  payLevel,
+  daPercentOverride,
+  taRateOverride,
+  edit,
+}: TravelFormProps) {
   const router = useRouter();
-  const [journeyDate, setJourneyDate] = useState("");
-  const [returnDate, setReturnDate] = useState("");
-  const [departureTime, setDepartureTime] = useState("");
-  const [returnTime, setReturnTime] = useState("");
-  const [beyond8Km, setBeyond8Km] = useState(true);
-  const [manual, setManual] = useState(false);
-  const [claimPercent, setClaimPercent] = useState("100");
+  const [journeyDate, setJourneyDate] = useState(edit?.journeyDate ?? "");
+  const [returnDate, setReturnDate] = useState(edit?.returnDate ?? "");
+  const [departureTime, setDepartureTime] = useState(edit?.departureTime ?? "");
+  const [returnTime, setReturnTime] = useState(edit?.returnTime ?? "");
+  const [beyond8Km, setBeyond8Km] = useState(edit?.beyond8Km ?? true);
+  const [manual, setManual] = useState(edit?.manualPercent != null);
+  const [claimPercent, setClaimPercent] = useState(
+    String(edit?.manualPercent ?? 100),
+  );
 
   const rateKnown = payLevel != null || taRateOverride != null;
 
@@ -63,7 +86,7 @@ export function TravelForm({ payLevel, daPercentOverride, taRateOverride }: Trav
   return (
     <Card className="mx-auto max-w-lg">
       <CardHeader>
-        <CardTitle>Record Travel</CardTitle>
+        <CardTitle>{edit ? "Edit Travel" : "Record Travel"}</CardTitle>
         <p className="text-sm text-muted-foreground">
           Daily allowance is worked out from the time you were away from
           headquarters.
@@ -82,18 +105,31 @@ export function TravelForm({ payLevel, daPercentOverride, taRateOverride }: Trav
         <form
           action={async (fd) => {
             const result = await recordTravel(fd);
-            if (toastResult(result, "Travel recorded")) router.push("/records/ta");
+            if (!toastResult(result, edit ? "Travel updated" : "Travel recorded")) return;
+            router.push(edit ? `/timeline/${result.data?.id}` : "/records/ta");
           }}
           className="space-y-4"
         >
+          {edit && <input type="hidden" name="replacesEventId" value={edit.eventId} />}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="ta-from">From</Label>
-              <Input id="ta-from" name="from" placeholder="e.g. HWH (HQ)" />
+              <Input
+                id="ta-from"
+                name="from"
+                placeholder="e.g. HWH (HQ)"
+                defaultValue={edit?.from}
+              />
             </div>
             <div>
               <Label htmlFor="ta-to">To (destination)</Label>
-              <Input id="ta-to" name="to" required placeholder="e.g. KGP" />
+              <Input
+                id="ta-to"
+                name="to"
+                required
+                placeholder="e.g. KGP"
+                defaultValue={edit?.to}
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -103,6 +139,7 @@ export function TravelForm({ payLevel, daPercentOverride, taRateOverride }: Trav
                 name="journeyDate"
                 required
                 placeholder="Date"
+                defaultValue={edit?.journeyDate}
                 onValueChange={setJourneyDate}
               />
             </div>
@@ -121,6 +158,7 @@ export function TravelForm({ payLevel, daPercentOverride, taRateOverride }: Trav
               <DatePicker
                 name="returnDate"
                 placeholder="Same day"
+                defaultValue={edit?.returnDate}
                 onValueChange={setReturnDate}
               />
             </div>
@@ -140,7 +178,12 @@ export function TravelForm({ payLevel, daPercentOverride, taRateOverride }: Trav
           )}
           <div>
             <Label htmlFor="ta-purpose">Purpose</Label>
-            <Input id="ta-purpose" name="purpose" placeholder="Inspection, training..." />
+            <Input
+              id="ta-purpose"
+              name="purpose"
+              placeholder="Inspection, training..."
+              defaultValue={edit?.purpose}
+            />
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -203,14 +246,20 @@ export function TravelForm({ payLevel, daPercentOverride, taRateOverride }: Trav
           )}
           <div>
             <Label htmlFor="ta-remarks">Remarks</Label>
-            <Textarea id="ta-remarks" name="remarks" rows={2} placeholder="Train no., duty card no." />
+            <Textarea
+              id="ta-remarks"
+              name="remarks"
+              rows={2}
+              placeholder="Train no., duty card no."
+              defaultValue={edit?.remarks ?? undefined}
+            />
           </div>
           <SubmitButton
             className="w-full"
-            pendingLabel="Recording…"
+            pendingLabel={edit ? "Saving…" : "Recording…"}
             disabled={!rateKnown || percent == null || !journeyDate}
           >
-            Record
+            {edit ? "Save changes" : "Record"}
           </SubmitButton>
         </form>
       </CardContent>
