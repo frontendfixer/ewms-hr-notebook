@@ -11,10 +11,14 @@ import { claimStatusService } from "@/lib/services/claim-status-service";
 import { monthlyClaimService } from "@/lib/services/monthly-claim-service";
 
 export const ledgerService = {
-  async getBalances(userId: string) {
+  /** `excludeEventId` leaves out one entry's own postings, e.g. the leave being edited. */
+  async getBalances(userId: string, excludeEventId?: string) {
     const entries = await prisma.ledgerEntry.groupBy({
       by: ["account"],
-      where: { userId },
+      where: {
+        userId,
+        ...(excludeEventId ? { NOT: { eventId: excludeEventId } } : {}),
+      },
       _sum: { amount: true },
     });
     const map: Record<string, number> = {};
@@ -29,6 +33,7 @@ export const ledgerService = {
     userId: string,
     db: LedgerDb = prisma,
     validOn: Date = new Date(),
+    excludeEventId?: string,
   ) {
     const credits = await db.ledgerEntry.groupBy({
       by: ["subAccountKey"],
@@ -37,6 +42,7 @@ export const ledgerService = {
         account: LedgerAccount.CR_CREDIT,
         subAccountKey: { not: null },
         OR: [{ expiresAt: null }, { expiresAt: { gt: validOn } }],
+        ...(excludeEventId ? { NOT: { eventId: excludeEventId } } : {}),
       },
       _sum: { amount: true },
       _min: { expiresAt: true, occurredAt: true },

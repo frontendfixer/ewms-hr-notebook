@@ -41,6 +41,7 @@ import { leaveAccrualService } from "@/lib/services/leave-accrual-service";
 import { monthlyClaimService } from "@/lib/services/monthly-claim-service";
 import { isBalanceDeductingLeaveType, LEAVE_TYPE_SHORT_LABELS } from "@/lib/leave-types";
 import { CLAIM_STATUS_LABELS } from "@/lib/design-tokens";
+import { editLockReason } from "@/lib/edit-rules";
 
 const LEAVE_ACCOUNT_MAP: Partial<Record<LeaveType, LedgerAccount>> = {
   CL: LedgerAccount.LEAVE_CL,
@@ -94,6 +95,85 @@ async function crDayKind(
   );
 }
 
+type Tx = Prisma.TransactionClient;
+
+/**
+ * Void an event and its children, posting reversing ledger entries. Each void
+ * is recorded as an EVENT_VOIDED event titled "<titlePrefix>: <title>".
+ */
+async function voidTree(
+  tx: Tx,
+  userId: string,
+  eventId: string,
+  titlePrefix: string,
+  reason?: string,
+): Promise<void> {
+  const event = await tx.workEvent.findFirst({
+    where: { id: eventId, userId, voidedAt: null },
+    include: { ledgerEntries: true },
+  });
+  if (!event) return;
+
+  const children = await tx.workEvent.findMany({
+    where: { parentEventId: event.id, userId, voidedAt: null },
+    select: { id: true },
+  });
+
+  for (const child of children) {
+    await voidTree(tx, userId, child.id, titlePrefix, reason);
+  }
+
+  const voidEv = await tx.workEvent.create({
+    data: {
+      userId,
+      eventType: WorkEventType.EVENT_VOIDED,
+      domain: EventDomain.META,
+      occurredAt: new Date(),
+      title: `${titlePrefix}: ${event.title}`,
+      parentEventId: event.id,
+      remarks: reason,
+      payload: { voidedEventId: event.id },
+    },
+  });
+
+  await tx.workEvent.update({
+    where: { id: event.id },
+    data: { voidedAt: new Date(), voidingEventId: voidEv.id },
+  });
+
+  for (const entry of event.ledgerEntries) {
+    await tx.ledgerEntry.create({
+      data: {
+        userId,
+        eventId: voidEv.id,
+        account: entry.account,
+        subAccountKey: entry.subAccountKey,
+        amount: Number(entry.amount) * -1,
+        occurredAt: entry.occurredAt,
+        expiresAt: entry.expiresAt,
+        metadata: { reverses: entry.id },
+      },
+    });
+  }
+}
+
+/** The CR_CONSUMED event (with its leave) that uses any of these credits. */
+async function findCrUsage(userId: string, creditIds: string[]) {
+  if (creditIds.length === 0) return null;
+  const used = await prisma.workEvent.findMany({
+    where: { userId, eventType: WorkEventType.CR_CONSUMED, voidedAt: null },
+    include: { parentEvent: true },
+  });
+  return (
+    used.find((u) =>
+      creditIds.includes((u.payload as { crCreditEventId?: string }).crCreditEventId ?? ""),
+    ) ?? null
+  );
+}
+
+const EDIT_TITLE_PREFIX = "Edited";
+const EDIT_REASON = "Edited by user";
+
 type LeavePayload = {
   leaveType?: LeaveType;
   startDate?: string;
@@ -103,7 +183,91 @@ type LeavePayload = {
 };
 
 export const eventService = {
-  async recordHolidayWork(userId: string, input: HolidayWorkInput) {
+  /**
+   * The event an edit of `eventId` replaces, and why it is locked (null when
+   * it can be edited). A CR credit resolves to its holiday-work event, which
+   * owns the credit.
+   */
+  async getEditTarget(userId: string, eventId: string) {
+    const event = await prisma.workEvent.findFirst({
+      where: { id: eventId, userId, voidedAt: null },
+    });
+    if (!event) throw new Error("Entry not found");
+
+    if (
+      event.eventType === WorkEventType.CR_CREDIT_ISSUED ||
+      event.eventType === WorkEventType.HOLIDAY_WORK_RECORDED
+    ) {
+      const workId =
+        event.eventType === WorkEventType.HOLIDAY_WORK_RECORDED
+          ? event.id
+          : event.parentEventId;
+      const work = workId
+        ? await prisma.workEvent.findFirst({
+            where: {
+              id: workId,
+              userId,
+              eventType: WorkEventType.HOLIDAY_WORK_RECORDED,
+              voidedAt: null,
+            },
+          })
+        : null;
+      if (!work) {
+        return { event, credit: null, reason: "This entry can't be edited" };
+      }
+      const credit = await prisma.workEvent.findFirst({
+        where: {
+          parentEventId: work.id,
+          userId,
+          eventType: WorkEventType.CR_CREDIT_ISSUED,
+          voidedAt: null,
+        },
+      });
+      const usage = await findCrUsage(userId, credit ? [credit.id] : []);
+      return {
+        event: work,
+        credit,
+        reason: editLockReason({
+          eventType: work.eventType,
+          crUsedBy: usage ? (usage.parentEvent?.title ?? "a leave") : null,
+        }),
+      };
+    }
+
+    const claimStatus =
+      event.eventType === WorkEventType.NIGHT_DUTY_RECORDED ||
+      event.eventType === WorkEventType.TRAVEL_RECORDED
+        ? await claimStatusService.getStatus(event.id)
+        : null;
+    return {
+      event,
+      credit: null,
+      reason: editLockReason({ eventType: event.eventType, claimStatus }),
+    };
+  },
+
+  /** The event to replace, after checking it can be edited as `eventType`. */
+  async requireEditable(userId: string, eventId: string, eventType: WorkEventType) {
+    const target = await this.getEditTarget(userId, eventId);
+    if (target.reason) throw new Error(target.reason);
+    if (target.event.eventType !== eventType) {
+      throw new Error("This entry is a different kind of record");
+    }
+    return target.event;
+  },
+
+  async recordHolidayWork(
+    userId: string,
+    input: HolidayWorkInput,
+    replacesEventId?: string,
+  ) {
+    const replaced = replacesEventId
+      ? await this.requireEditable(
+          userId,
+          replacesEventId,
+          WorkEventType.HOLIDAY_WORK_RECORDED,
+        )
+      : null;
     const expiryDays = await getCrExpiryDays(userId);
     const workDate = startOfDay(input.workDate);
     if (workDate > startOfDay(new Date())) {
@@ -120,11 +284,15 @@ export const eventService = {
         eventType: WorkEventType.HOLIDAY_WORK_RECORDED,
         occurredAt: workDate,
         voidedAt: null,
+        ...(replaced ? { NOT: { id: replaced.id } } : {}),
       },
     });
     if (existing) throw new Error(`CR already recorded for ${formatDate(workDate)}`);
 
     return prisma.$transaction(async (tx) => {
+      if (replaced) {
+        await voidTree(tx, userId, replaced.id, EDIT_TITLE_PREFIX, EDIT_REASON);
+      }
       const hw = await tx.workEvent.create({
         data: {
           userId,
@@ -138,6 +306,7 @@ export const eventService = {
             workDate: workDate.toISOString(),
             dayLabel: day.label,
             dayKind: day.kind,
+            ...(replaced ? { replacesEventId: replaced.id } : {}),
           },
         },
       });
@@ -193,6 +362,7 @@ export const eventService = {
     start: Date,
     end: Date,
     duration: string,
+    excludeEventId?: string,
   ) {
     const candidates = await prisma.workEvent.findMany({
       where: {
@@ -200,6 +370,7 @@ export const eventService = {
         eventType: WorkEventType.LEAVE_RECORDED,
         voidedAt: null,
         occurredAt: { lte: end, gte: addDays(start, -400) },
+        ...(excludeEventId ? { NOT: { id: excludeEventId } } : {}),
       },
     });
     return candidates.find((e) => {
@@ -217,10 +388,17 @@ export const eventService = {
     });
   },
 
-  async recordLeave(userId: string, input: LeaveRecordInput) {
+  async recordLeave(
+    userId: string,
+    input: LeaveRecordInput,
+    replacesEventId?: string,
+  ) {
     if (input.usesCr && input.leaveType !== LeaveType.SPECIAL_CL) {
       throw new Error("CR can only be used with compensatory rest leave");
     }
+    const replaced = replacesEventId
+      ? await this.requireEditable(userId, replacesEventId, WorkEventType.LEAVE_RECORDED)
+      : null;
     await leaveAccrualService.ensureAccruals(userId);
 
     const start = startOfDay(input.startDate);
@@ -231,14 +409,21 @@ export const eventService = {
       throw new Error("All selected dates are Sundays or holidays — no leave needed");
     }
 
-    const overlap = await this.findOverlappingLeave(userId, start, end, input.duration);
+    const overlap = await this.findOverlappingLeave(
+      userId,
+      start,
+      end,
+      input.duration,
+      replaced?.id,
+    );
     if (overlap) {
       throw new Error(`These dates overlap an existing leave: ${overlap.title}`);
     }
 
     const account = !input.usesCr ? LEAVE_ACCOUNT_MAP[input.leaveType] : undefined;
     if (account && isBalanceDeductingLeaveType(input.leaveType)) {
-      const balances = await ledgerService.getBalances(userId);
+      // An edit gives back what the old leave took before checking.
+      const balances = await ledgerService.getBalances(userId, replaced?.id);
       const available = balances[account] ?? 0;
       if (available < days) {
         throw new Error(
@@ -260,6 +445,10 @@ export const eventService = {
       : `${LEAVE_TYPE_SHORT_LABELS[input.leaveType]} leave — ${rangeLabel}${halfLabel}`;
 
     return prisma.$transaction(async (tx) => {
+      // Void first so CR the old leave used is free again for the allocation.
+      if (replaced) {
+        await voidTree(tx, userId, replaced.id, EDIT_TITLE_PREFIX, EDIT_REASON);
+      }
       let allocations: { creditEventId: string; amount: number }[] = [];
       if (input.usesCr) {
         const credits = await ledgerService.getAvailableCrCredits(userId, tx, start);
@@ -296,6 +485,7 @@ export const eventService = {
             calendarDays: count.calendarDays,
             excludedDays: count.excludedDays,
             usesCr: input.usesCr,
+            ...(replaced ? { replacesEventId: replaced.id } : {}),
           },
         },
       });
@@ -407,7 +597,18 @@ export const eventService = {
     }, INTERACTIVE_TX_OPTIONS);
   },
 
-  async recordNightDuty(userId: string, input: NightDutyInput) {
+  async recordNightDuty(
+    userId: string,
+    input: NightDutyInput,
+    replacesEventId?: string,
+  ) {
+    const replaced = replacesEventId
+      ? await this.requireEditable(
+          userId,
+          replacesEventId,
+          WorkEventType.NIGHT_DUTY_RECORDED,
+        )
+      : null;
     const pay = await requirePaySettings(userId);
     if (pay.payLevel != null && pay.payLevel > NDA_MAX_PAY_LEVEL + 1) {
       throw new Error(
@@ -417,6 +618,7 @@ export const eventService = {
     const endDate = input.endDate ?? input.startDate;
     const dates = eachDayInclusive(input.startDate, endDate);
     if (dates.length === 0) throw new Error("Select at least one date");
+    if (replaced && dates.length > 1) throw new Error("Edit one night at a time");
 
     const probe = calculateNda(pay.basicPay, 0, input.startTime, input.endTime);
     if (probe.nightMinutes === 0) {
@@ -431,6 +633,7 @@ export const eventService = {
         eventType: WorkEventType.NIGHT_DUTY_RECORDED,
         voidedAt: null,
         occurredAt: { in: dates },
+        ...(replaced ? { NOT: { id: replaced.id } } : {}),
       },
       select: { occurredAt: true },
     });
@@ -443,6 +646,9 @@ export const eventService = {
     }
 
     return prisma.$transaction(async (tx) => {
+      if (replaced) {
+        await voidTree(tx, userId, replaced.id, EDIT_TITLE_PREFIX, EDIT_REASON);
+      }
       const created = [];
       for (const dutyDate of dates) {
         const daPercent = daPercentOn(dutyDate, pay.daPercentOverride);
@@ -472,6 +678,7 @@ export const eventService = {
               basicPay: pay.basicPay,
               payLevel: pay.payLevel,
               daPercent,
+              ...(replaced ? { replacesEventId: replaced.id } : {}),
             },
           },
         });
@@ -482,7 +689,14 @@ export const eventService = {
     }, INTERACTIVE_TX_OPTIONS);
   },
 
-  async recordTravel(userId: string, input: TravelInput) {
+  async recordTravel(
+    userId: string,
+    input: TravelInput,
+    replacesEventId?: string,
+  ) {
+    const replaced = replacesEventId
+      ? await this.requireEditable(userId, replacesEventId, WorkEventType.TRAVEL_RECORDED)
+      : null;
     const pay = await getPaySettings(userId);
     if (pay.payLevel == null && pay.taRateOverride == null) {
       throw new Error(
@@ -517,6 +731,7 @@ export const eventService = {
         eventType: WorkEventType.TRAVEL_RECORDED,
         voidedAt: null,
         occurredAt: journeyDate,
+        ...(replaced ? { NOT: { id: replaced.id } } : {}),
       },
     });
     if (duplicate) {
@@ -535,6 +750,9 @@ export const eventService = {
     const amount = calculateTaAmount(dailyRate, claimPercent);
 
     return prisma.$transaction(async (tx) => {
+      if (replaced) {
+        await voidTree(tx, userId, replaced.id, EDIT_TITLE_PREFIX, EDIT_REASON);
+      }
       const event = await tx.workEvent.create({
         data: {
           userId,
@@ -560,6 +778,7 @@ export const eventService = {
             // Kept for entries displayed by older code paths.
             taBaseAmount: dailyRate,
             payLevel: pay.payLevel,
+            ...(replaced ? { replacesEventId: replaced.id } : {}),
           },
         },
       });
@@ -712,6 +931,13 @@ export const eventService = {
     if (STATUS_EVENT_TYPES.includes(root.eventType)) {
       throw new Error("Use “Undo last step” on the claim to reverse a status change");
     }
+    // Voiding a void would reverse the reversal and bring the old balance back.
+    if (root.eventType === WorkEventType.EVENT_VOIDED) {
+      throw new Error("This is a history record and can't be deleted");
+    }
+    if (root.eventType === WorkEventType.CR_CONSUMED) {
+      throw new Error("Edit or delete the leave that used this CR instead");
+    }
 
     let targetId = eventId;
     if (
@@ -733,74 +959,17 @@ export const eventService = {
               })
             ).map((c) => c.id)
           : [];
-    if (creditIds.length > 0) {
-      const used = await prisma.workEvent.findMany({
-        where: { userId, eventType: WorkEventType.CR_CONSUMED, voidedAt: null },
-        include: { parentEvent: true },
-      });
-      const usage = used.find((u) =>
-        creditIds.includes((u.payload as { crCreditEventId?: string }).crCreditEventId ?? ""),
+    const usage = await findCrUsage(userId, creditIds);
+    if (usage) {
+      throw new Error(
+        `This CR is used by “${usage.parentEvent?.title ?? "a leave"}”. Delete that leave first.`,
       );
-      if (usage) {
-        throw new Error(
-          `This CR is used by “${usage.parentEvent?.title ?? "a leave"}”. Delete that leave first.`,
-        );
-      }
     }
 
-    return prisma.$transaction(async (tx) => {
-      const voidOne = async (targetId: string): Promise<void> => {
-        const event = await tx.workEvent.findFirst({
-          where: { id: targetId, userId, voidedAt: null },
-          include: { ledgerEntries: true },
-        });
-        if (!event) return;
-
-        const children = await tx.workEvent.findMany({
-          where: { parentEventId: event.id, userId, voidedAt: null },
-          select: { id: true },
-        });
-
-        for (const child of children) {
-          await voidOne(child.id);
-        }
-
-        const voidEv = await tx.workEvent.create({
-          data: {
-            userId,
-            eventType: WorkEventType.EVENT_VOIDED,
-            domain: EventDomain.META,
-            occurredAt: new Date(),
-            title: `Deleted: ${event.title}`,
-            parentEventId: event.id,
-            remarks: reason,
-            payload: { voidedEventId: event.id },
-          },
-        });
-
-        await tx.workEvent.update({
-          where: { id: event.id },
-          data: { voidedAt: new Date(), voidingEventId: voidEv.id },
-        });
-
-        for (const entry of event.ledgerEntries) {
-          await tx.ledgerEntry.create({
-            data: {
-              userId,
-              eventId: voidEv.id,
-              account: entry.account,
-              subAccountKey: entry.subAccountKey,
-              amount: Number(entry.amount) * -1,
-              occurredAt: entry.occurredAt,
-              expiresAt: entry.expiresAt,
-              metadata: { reverses: entry.id },
-            },
-          });
-        }
-      };
-
-      await voidOne(targetId);
-    }, INTERACTIVE_TX_OPTIONS);
+    return prisma.$transaction(
+      (tx) => voidTree(tx, userId, targetId, "Deleted", reason),
+      INTERACTIVE_TX_OPTIONS,
+    );
   },
 
   async getEvents(

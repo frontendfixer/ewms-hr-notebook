@@ -12,7 +12,7 @@ import {
   usedCrCardClass,
 } from "@/lib/domain-styles";
 import { formatCurrency, cn } from "@/lib/utils";
-import { Award, Moon, Palmtree, Sun, Train } from "lucide-react";
+import { Award, Moon, Palmtree, Pencil, Sun, Train } from "lucide-react";
 import type { ReactNode } from "react";
 
 const domainIcons: Record<EventDomain, typeof Sun> = {
@@ -33,6 +33,8 @@ type EventCardShellProps = {
   statusBadge?: ReactNode;
   amount?: number;
   purpose?: string;
+  /** Show the edit shortcut; the edit page re-checks before saving. */
+  editable?: boolean;
 };
 
 export function EventCardShell({
@@ -45,6 +47,7 @@ export function EventCardShell({
   statusBadge,
   amount,
   purpose,
+  editable = false,
 }: EventCardShellProps) {
   const Icon = domainIcons[domain];
   const cardClass =
@@ -100,6 +103,15 @@ export function EventCardShell({
             )}
           </div>
         </Link>
+        {editable && (
+          <Link
+            href={`/timeline/${id}/edit`}
+            aria-label="Edit entry"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Pencil className="h-4 w-4" />
+          </Link>
+        )}
         <DeleteEventButton eventId={id} compact />
       </CardContent>
     </Card>
