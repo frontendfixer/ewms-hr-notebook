@@ -1,8 +1,13 @@
 import { requireUserId } from "@/lib/auth-server";
 import { feedService } from "@/lib/services/feed-service";
 import { insightService } from "@/lib/services/insight-service";
-import { BalanceStrip, FeedList } from "@/components/home/feed-widgets";
-import { MonthStatsCard, InsightsCard } from "@/components/home/home-insights";
+import {
+  AttentionList,
+  BalancePanel,
+  HomeHeader,
+  RecentActivity,
+} from "@/components/home/feed-widgets";
+import { SummaryCard } from "@/components/home/summary-card";
 import { prisma } from "@/lib/db";
 import { APP_TIME_ZONE } from "@/lib/utils";
 
@@ -17,36 +22,40 @@ export default async function HomePage() {
   ]);
 
   // The server runs in UTC; greet by the time in India.
+  const now = new Date();
   const hour = Number(
     new Intl.DateTimeFormat("en-IN", {
       hour: "numeric",
       hourCycle: "h23",
       timeZone: APP_TIME_ZONE,
-    }).format(new Date()),
+    }).format(now),
   );
   const greeting =
     hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const today = new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: APP_TIME_ZONE,
+  }).format(now);
+
+  const reminders = feed.filter((i) => i.type === "REMINDER");
+  const holiday = feed.find((i) => i.type === "UPCOMING");
+  const activity = feed.filter((i) => i.type === "ACTIVITY");
 
   return (
-    <div className="mx-auto min-w-0 max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">
-          {greeting}, {user?.name?.split(" ")[0] ?? "there"} 👋
-        </h1>
-        <p className="text-sm text-muted-foreground">Leave, CR and claims at a glance</p>
-      </div>
-
-      <BalanceStrip {...balances} />
-
-      {/* Reminders need action, so they come before the summary cards. */}
-      <FeedList items={feed.filter((i) => i.type === "REMINDER")} />
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <MonthStatsCard insights={insights} />
-        <InsightsCard insights={insights} />
-      </div>
-
-      <FeedList items={feed.filter((i) => i.type !== "REMINDER")} />
+    <div className="mx-auto min-w-0 max-w-2xl space-y-3">
+      <HomeHeader
+        greeting={greeting}
+        name={user?.name?.split(" ")[0] ?? "there"}
+        today={today}
+        holiday={holiday}
+      />
+      <BalancePanel {...balances} />
+      {/* Reminders need action, so they come before the summaries. */}
+      <AttentionList items={reminders} />
+      <SummaryCard insights={insights} />
+      <RecentActivity items={activity} />
     </div>
   );
 }
