@@ -2,7 +2,7 @@ import { ClaimStatus, EventDomain, WorkEventType } from "@/generated/prisma/clie
 import { prisma } from "@/lib/db";
 import { ledgerService } from "@/lib/services/ledger-service";
 import { monthlyClaimService } from "@/lib/services/monthly-claim-service";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { APP_TIME_ZONE, formatCurrency, formatShortDate } from "@/lib/utils";
 import { leaveAccrualService } from "@/lib/services/leave-accrual-service";
 import { getPaySettings } from "@/lib/pay-settings";
 
@@ -63,7 +63,7 @@ export const feedService = {
         items.push({
           type: "REMINDER",
           priority: daysLeft <= 7 ? "high" : "normal",
-          title: `CR earned ${cr.earnedAt ? formatDate(cr.earnedAt) : ""} expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
+          title: `CR from ${cr.earnedAt ? formatShortDate(cr.earnedAt) : "an earlier date"} expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
           action: {
             label: "Use It",
             href: `/add/leave?mode=cr&cr=${cr.creditEventId}`,
@@ -126,8 +126,13 @@ export const feedService = {
       }
     }
 
+    // Holidays are date-only (UTC midnight). Compare with today's date in India,
+    // not `now`, so a holiday falling today still shows.
+    const todayInIndia = new Intl.DateTimeFormat("en-CA", {
+      timeZone: APP_TIME_ZONE,
+    }).format(now);
     const nextHoliday = await prisma.publicHoliday.findFirst({
-      where: { userId, date: { gte: now } },
+      where: { userId, date: { gte: new Date(`${todayInIndia}T00:00:00.000Z`) } },
       orderBy: { date: "asc" },
     });
     if (nextHoliday) {

@@ -55,7 +55,15 @@ Links to Settings, Profile, Reports, Search, and record-type shortcuts.
 
 ### Home (`/home`)
 
-Greeting, balance strip (CR / leave / pending ₹), month stats, insights cards, activity feed with reminders (CR expiry ≤14 days, pending payments, next holiday).
+Compact, one-and-a-half screens on a phone. Top to bottom:
+
+1. **Header** — greeting, today's date and the next holiday with a countdown.
+2. **Balances** — one card: CR / CL / LAP / LHAP in a row, plus a "Claims due ₹" row.
+3. **Needs attention** — reminders (pay setup, CR expiring ≤14 days, bills awaiting payment or not yet billed, short-paid claims). Top two show; the rest sit behind "Show N more". Only urgent items (CR ≤7 days, pay setup) get a solid button.
+4. **Summary** — one card with a This month / This year toggle: night duty, leave, travel and CR counts, then pending claims (month) or Sundays worked, night-duty average and top destination (year).
+5. **Recent activity** — latest three entries (five on wider screens) with domain icons. A new user sees quick-add shortcuts here instead.
+
+`loading.tsx` shows a skeleton of the same shape.
 
 ### Calendar (`/calendar`)
 
