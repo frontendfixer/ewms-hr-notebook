@@ -11,14 +11,15 @@ import { cn } from "@/lib/utils";
 type DeleteEventButtonProps = {
   eventId: string;
   redirectTo?: string;
-  compact?: boolean;
+  /** Full-width row for use inside a menu. */
+  menuItem?: boolean;
   className?: string;
 };
 
 export function DeleteEventButton({
   eventId,
   redirectTo,
-  compact = false,
+  menuItem = false,
   className,
 }: DeleteEventButtonProps) {
   const router = useRouter();
@@ -47,19 +48,19 @@ export function DeleteEventButton({
     });
   };
 
-  if (compact) {
+  if (menuItem) {
     return (
       <button
         type="button"
         onClick={handleDelete}
         disabled={pending}
-        aria-label="Delete entry"
         className={cn(
-          "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50",
+          "flex min-h-11 w-full items-center gap-2.5 px-3.5 text-sm text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50",
           className,
         )}
       >
-        <Trash2 className="h-4 w-4" />
+        <Trash2 className="h-4 w-4" aria-hidden />
+        {pending ? "Deleting…" : "Delete"}
       </button>
     );
   }

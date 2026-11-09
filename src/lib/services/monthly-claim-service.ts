@@ -4,35 +4,24 @@ import {
   WorkEventType,
 } from "@/generated/prisma/client";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "@/lib/db";
-import { formatDate } from "@/lib/utils";
 import { claimStatusService } from "@/lib/services/claim-status-service";
+import { buildSettlementView, type SettlementView } from "@/lib/claim-summary";
 import {
   aggregateChildStatuses,
-  addToStatusBreakdown,
-  aggregateDomainClaims,
-  emptyStatusBreakdown,
   getMonthKey,
   settlementCorrelationId,
   settlementTitle,
-  type ClaimDomainSegment,
   type ClaimSettlementDomain,
-  type ClaimStatusBreakdown,
 } from "@/lib/services/monthly-claim-utils";
 
 export {
   aggregateChildStatuses,
-  addToStatusBreakdown,
-  aggregateDomainClaims,
-  emptyStatusBreakdown,
   getMonthKey,
   settlementCorrelationId,
   settlementTitle,
 } from "@/lib/services/monthly-claim-utils";
 export type {
-  ClaimDomainSegment,
   ClaimSettlementDomain,
-  ClaimStatusBreakdown,
-  ClaimStatusSegment,
   MonthKey,
 } from "@/lib/services/monthly-claim-utils";
 
@@ -47,35 +36,19 @@ export type SettlementSummary = {
   shortPaid: number;
 };
 
-export type PassedAwaitingSettlement = {
-  id: string;
-  title: string;
-  domain: ClaimSettlementDomain;
-  total: number;
-  childCount: number;
-  status: ClaimStatus;
-};
-
-export type ClaimPageStats = {
-  year: number;
-  yearLabel: string;
-  totalAmount: number;
-  totalEntries: number;
-  travel: ClaimDomainSegment;
-  nightDuty: ClaimDomainSegment;
-  byStatus: ClaimStatusBreakdown;
-  passedAwaitingPayment: {
-    totalAmount: number;
-    settlementCount: number;
-    settlements: PassedAwaitingSettlement[];
-  };
-};
-
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
 const CLAIM_EVENT_TYPES = [
   WorkEventType.NIGHT_DUTY_RECORDED,
   WorkEventType.TRAVEL_RECORDED,
+] as const;
+
+/** Bill, pass and payment steps (and the fallback status change) recorded under a settlement. */
+const STEP_EVENT_TYPES = [
+  WorkEventType.BILL_SUBMITTED,
+  WorkEventType.CLAIM_PASSED,
+  WorkEventType.PAYMENT_RECEIVED,
+  WorkEventType.STATUS_CHANGED,
 ] as const;
 
 export const monthlyClaimService = {
@@ -207,44 +180,6 @@ export const monthlyClaimService = {
     };
   },
 
-  /** Date and note (bill no., amount) for each status step, for the stepper. */
-  async getStepDetails(settlementId: string) {
-    const events = await prisma.workEvent.findMany({
-      where: {
-        parentEventId: settlementId,
-        voidedAt: null,
-        eventType: {
-          in: [
-            WorkEventType.BILL_SUBMITTED,
-            WorkEventType.CLAIM_PASSED,
-            WorkEventType.PAYMENT_RECEIVED,
-          ],
-        },
-      },
-      orderBy: { recordedAt: "asc" },
-    });
-    const details: Partial<Record<ClaimStatus, { date?: string; note?: string }>> = {};
-    for (const event of events) {
-      const p = event.payload as {
-        to?: ClaimStatus;
-        billNumber?: string;
-        amount?: number;
-        paymentReference?: string;
-      };
-      if (!p.to) continue;
-      const notes = [
-        p.billNumber ? `Bill ${p.billNumber}` : null,
-        p.to === ClaimStatus.PAID && p.amount != null ? `₹${p.amount.toLocaleString("en-IN")} received` : null,
-        p.paymentReference ?? null,
-      ].filter(Boolean);
-      details[p.to] = {
-        date: formatDate(event.occurredAt),
-        note: notes.join(" · ") || undefined,
-      };
-    }
-    return details;
-  },
-
   async getSettlementChildren(settlementId: string, db: DbClient = prisma) {
     return db.workEvent.findMany({
       where: {
@@ -256,118 +191,65 @@ export const monthlyClaimService = {
     });
   },
 
-  async listPendingSettlements(userId: string) {
+  /**
+   * Every monthly bill the user has, with what it is worth, what was received
+   * and where it stands. Two queries in all, however many months there are.
+   */
+  async listSettlementViews(
+    userId: string,
+    /** Only this month's bills (both types), e.g. for a detail page. */
+    only?: { year: number; month: number },
+  ): Promise<SettlementView[]> {
     const settlements = await prisma.workEvent.findMany({
       where: {
         userId,
         eventType: WorkEventType.MONTHLY_CLAIM_SETTLEMENT,
         voidedAt: null,
+        ...(only
+          ? {
+              correlationId: {
+                in: (["NIGHT_DUTY", "TRAVEL"] as const).map((d) =>
+                  settlementCorrelationId(d, only.year, only.month),
+                ),
+              },
+            }
+          : {}),
       },
       orderBy: { occurredAt: "desc" },
     });
+    if (settlements.length === 0) return [];
 
-    const result = [];
-    for (const settlement of settlements) {
-      const summary = await this.getSettlementSummary(settlement.id);
-      const children = await this.getSettlementChildren(settlement.id);
-      const unsettled =
-        summary.status !== ClaimStatus.PAID || summary.shortPaid > 0;
-      if (
-        unsettled &&
-        summary.status !== ClaimStatus.VOIDED &&
-        children.length > 0
-      ) {
-        result.push({
-          ...settlement,
-          ...summary,
-          childCount: children.length,
-        });
-      }
-    }
-    return result;
-  },
-
-  async getClaimPageStats(userId: string): Promise<ClaimPageStats> {
-    const year = new Date().getFullYear();
-    const yearStart = new Date(year, 0, 1);
-    const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
-
-    const [yearClaims, settlements] = await Promise.all([
-      prisma.workEvent.findMany({
-        where: {
-          userId,
-          eventType: { in: [...CLAIM_EVENT_TYPES] },
-          voidedAt: null,
-          occurredAt: { gte: yearStart, lte: yearEnd },
-        },
-      }),
-      prisma.workEvent.findMany({
-        where: {
-          userId,
-          eventType: WorkEventType.MONTHLY_CLAIM_SETTLEMENT,
-          voidedAt: null,
-        },
-        orderBy: { occurredAt: "desc" },
-      }),
-    ]);
-
-    const domainStats = aggregateDomainClaims(
-      yearClaims.map((claim) => ({
-        eventType: claim.eventType,
-        amount: (claim.payload as { amount?: number }).amount ?? 0,
-      })),
-    );
-
-    let byStatus = emptyStatusBreakdown();
-    const passedSettlements: PassedAwaitingSettlement[] = [];
-
-    for (const settlement of settlements) {
-      const { status, paid, outstanding } = await this.getSettlementSummary(
-        settlement.id,
-      );
-      const children = await this.getSettlementChildren(settlement.id);
-      if (children.length === 0) continue;
-
-      const settlementYear = settlement.occurredAt.getFullYear();
-      if (settlementYear === year) {
-        if (status === ClaimStatus.PAID) {
-          // Count what was received; any shortfall shows under "Claims due".
-          byStatus = addToStatusBreakdown(byStatus, status, paid);
-        } else {
-          // A reopened month is part paid, part waiting on a supplementary bill.
-          byStatus = addToStatusBreakdown(byStatus, status, outstanding);
-          if (paid > 0) {
-            byStatus = addToStatusBreakdown(byStatus, ClaimStatus.PAID, paid);
-          }
-        }
-      }
-
-      if (status === ClaimStatus.PASSED) {
-        passedSettlements.push({
-          id: settlement.id,
-          title: settlement.title,
-          domain: settlement.domain as ClaimSettlementDomain,
-          total: outstanding,
-          childCount: children.length,
-          status,
-        });
-      }
-    }
-
-    return {
-      year,
-      yearLabel: String(year),
-      totalAmount: domainStats.travel.amount + domainStats.nightDuty.amount,
-      totalEntries: domainStats.totalEntries,
-      travel: domainStats.travel,
-      nightDuty: domainStats.nightDuty,
-      byStatus,
-      passedAwaitingPayment: {
-        totalAmount: passedSettlements.reduce((sum, s) => sum + s.total, 0),
-        settlementCount: passedSettlements.length,
-        settlements: passedSettlements,
+    const children = await prisma.workEvent.findMany({
+      where: {
+        parentEventId: { in: settlements.map((x) => x.id) },
+        voidedAt: null,
+        eventType: { in: [...CLAIM_EVENT_TYPES, ...STEP_EVENT_TYPES] },
       },
-    };
+      select: {
+        id: true,
+        parentEventId: true,
+        eventType: true,
+        payload: true,
+        recordedAt: true,
+        occurredAt: true,
+      },
+    });
+
+    const byParent = new Map<string, typeof children>();
+    for (const child of children) {
+      const list = byParent.get(child.parentEventId!) ?? [];
+      list.push(child);
+      byParent.set(child.parentEventId!, list);
+    }
+
+    return settlements.map((settlement) => {
+      const own = byParent.get(settlement.id) ?? [];
+      return buildSettlementView({
+        settlement,
+        steps: own.filter((c) => (STEP_EVENT_TYPES as readonly WorkEventType[]).includes(c.eventType)),
+        claims: own.filter((c) => (CLAIM_EVENT_TYPES as readonly WorkEventType[]).includes(c.eventType)),
+      });
+    });
   },
 
   /**

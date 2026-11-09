@@ -60,7 +60,7 @@ export function NightDutyForm({
                 ? "Night duty recorded"
                 : `${count} night duties recorded`;
             if (!toastResult(result, message)) return;
-            router.push(edit ? `/timeline/${result.data?.id}` : "/records/night");
+            router.push(edit ? `/timeline/${result.data?.id}` : "/timeline?filter=NIGHT_DUTY");
           }}
           className="space-y-4"
         >

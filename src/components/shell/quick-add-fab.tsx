@@ -41,11 +41,11 @@ export function QuickAddFab() {
     <>
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 lg:bg-transparent"
+          className="fixed inset-0 z-[45] bg-black/40 lg:bg-transparent"
           onClick={() => setOpen(false)}
         />
       )}
-      <div className="fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2 print:hidden lg:bottom-6">
+      <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-50 flex flex-col items-end gap-2 print:hidden lg:bottom-6">
         {open && (
           <div className="mb-2 flex flex-col gap-1 rounded-2xl border border-border/60 bg-card p-2 shadow-lg">
             <p className="px-3 py-1 text-xs font-medium text-muted-foreground">Record</p>

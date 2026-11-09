@@ -1,6 +1,7 @@
 import { requireUserId } from "@/lib/auth-server";
 import { eventService } from "@/lib/services/event-service";
 import { EventCard } from "@/components/timeline/event-card";
+import { EventList } from "@/components/timeline/event-row";
 import Link from "next/link";
 
 export default async function SearchPage({
@@ -29,7 +30,7 @@ export default async function SearchPage({
       {events.length === 0 ? (
         <p className="text-muted-foreground">No matches found</p>
       ) : (
-        <div className="space-y-2">
+        <EventList>
           {events.map((e) => (
             <EventCard
               key={e.id}
@@ -39,9 +40,10 @@ export default async function SearchPage({
               occurredAt={e.occurredAt}
               payload={e.payload}
               eventType={e.eventType}
+              remarks={e.remarks}
             />
           ))}
-        </div>
+        </EventList>
       )}
       <Link href="/home" className="text-sm text-primary">
         ← Back home

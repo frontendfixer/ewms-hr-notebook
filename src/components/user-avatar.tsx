@@ -12,6 +12,8 @@ type UserAvatarProps = {
   image?: string | null;
   size?: keyof typeof sizeClasses;
   className?: string;
+  /** Set when the name is printed next to the avatar, so screen readers don't read it twice. */
+  decorative?: boolean;
 };
 
 function initialsFromName(name: string) {
@@ -29,6 +31,7 @@ export function UserAvatar({
   image,
   size = "md",
   className,
+  decorative = false,
 }: UserAvatarProps) {
   const sizeClass = sizeClasses[size];
 
@@ -37,7 +40,7 @@ export function UserAvatar({
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={image}
-        alt={name}
+        alt={decorative ? "" : name}
         referrerPolicy="no-referrer"
         className={cn("shrink-0 rounded-full object-cover", sizeClass, className)}
       />

@@ -1,133 +1,100 @@
 import Link from "next/link";
+import { BarChart3, ChevronRight, Palmtree, Settings } from "lucide-react";
 import { requireUserId } from "@/lib/auth-server";
-import {
-  Award,
-  BarChart3,
-  ChevronRight,
-  List,
-  Moon,
-  Palmtree,
-  Search,
-  Settings,
-  Train,
-  User,
-  Wallet,
-} from "lucide-react";
+import { prisma } from "@/lib/db";
+import { feedService } from "@/lib/services/feed-service";
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { Card, CardContent } from "@/components/ui/card";
-import { DOMAIN_STYLES } from "@/lib/design-tokens";
-import type { EventDomain } from "@/generated/prisma/client";
-import { cn } from "@/lib/utils";
+import { LogoGlyph } from "@/components/brand/logo";
+import { UserAvatar } from "@/components/user-avatar";
+import { Card } from "@/components/ui/card";
 
-const recordLinks: Array<{
-  href: string;
-  label: string;
-  icon: typeof Award;
-  domain?: EventDomain;
-}> = [
-  { href: "/leaves", label: "Manage Leaves", icon: Wallet },
-  { href: "/records/all", label: "All Records", icon: List },
-  { href: "/records/leave", label: "Leave", icon: Palmtree, domain: "LEAVE" },
-  { href: "/records/cr", label: "CR", icon: Award, domain: "CR" },
-  { href: "/records/night", label: "Night Duty", icon: Moon, domain: "NIGHT_DUTY" },
-  { href: "/records/ta", label: "Travel", icon: Train, domain: "TRAVEL" },
-];
+/** Balances can carry halves; drop float noise but keep the half. */
+function days(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
 
-const accountLinks = [
-  { href: "/settings", label: "Settings", icon: Settings, desc: "Pay, TA, holidays" },
-  { href: "/profile", label: "Profile", icon: User, desc: "Name, designation, employment no." },
-  { href: "/reports", label: "Reports", icon: BarChart3, desc: "Insights & export" },
-  { href: "/search", label: "Search", icon: Search, desc: "Find any record" },
-];
-
-function NavRow({
+function MoreRow({
   href,
   label,
-  icon: Icon,
   desc,
+  icon: Icon,
 }: {
   href: string;
   label: string;
+  desc: string;
   icon: typeof Settings;
-  desc?: string;
 }) {
   return (
-    <Link href={href}>
-      <Card className="transition-shadow hover:shadow-sm">
-        <CardContent className="flex items-center gap-3 p-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Icon className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-medium">{label}</p>
-            {desc && (
-              <p className="truncate text-xs text-muted-foreground">{desc}</p>
-            )}
-          </div>
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </CardContent>
-      </Card>
+    <Link
+      href={href}
+      className="flex min-h-14 items-center gap-3 px-3 py-2 transition-colors hover:bg-accent/60 active:bg-accent"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-[18px] w-[18px]" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{label}</span>
+        <span className="line-clamp-2 text-xs text-muted-foreground">{desc}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
     </Link>
   );
 }
 
 export default async function MorePage() {
-  await requireUserId();
+  const userId = await requireUserId();
+  const [user, balances] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, include: { profile: true } }),
+    feedService.getLeaveBalances(userId),
+  ]);
+  if (!user) return null;
+
+  const { designation, department } = user.profile ?? {};
+  const subtitle = [designation, department].filter(Boolean).join(" · ") || user.email;
 
   return (
-    <div className="mx-auto min-w-0 max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">More</h1>
-        <p className="text-sm text-muted-foreground">
-          Settings, profile, and record lenses
-        </p>
-      </div>
+    <div className="mx-auto min-w-0 max-w-2xl space-y-3">
+      <h1 className="px-1 text-lg font-semibold leading-tight">More</h1>
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Account</h2>
-        {accountLinks.map((item) => (
-          <NavRow key={item.href} {...item} />
-        ))}
-        <SignOutButton variant="row" />
-      </section>
+      <Link href="/profile" aria-label={`Profile: ${user.name}`} className="block">
+        <Card className="flex min-h-16 items-center gap-3 p-3 transition-colors hover:bg-accent/60 active:bg-accent">
+          <UserAvatar name={user.name} image={user.image} size="md" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold">{user.name}</span>
+            <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        </Card>
+      </Link>
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">My records</h2>
-        <div className="grid grid-cols-2 gap-2">
-          {recordLinks.map(({ href, label, icon: Icon, domain }) => {
-            const styles = domain ? DOMAIN_STYLES[domain] : null;
-            return (
-              <Link key={href} href={href}>
-                <Card
-                  className={cn(
-                    "transition-shadow hover:shadow-sm",
-                    styles && cn("border", styles.card, styles.border),
-                  )}
-                >
-                  <CardContent className="flex flex-col items-center gap-2 p-4 text-center">
-                    <div
-                      className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-xl",
-                        styles ? styles.icon : "bg-primary/10 text-primary",
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <span
-                      className={cn(
-                        "text-sm font-medium",
-                        styles?.label,
-                      )}
-                    >
-                      {label}
-                    </span>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
+      <Card className="divide-y divide-border/60 overflow-hidden">
+        <MoreRow
+          href="/leaves"
+          label="Leaves & CR"
+          desc={`CL ${days(balances.clBalance)} · LAP ${days(balances.lapBalance)} · LHAP ${days(balances.lhapBalance)} · CR ${days(balances.crBalance)}`}
+          icon={Palmtree}
+        />
+        <MoreRow
+          href="/reports"
+          label="Reports"
+          desc="Insights and CSV export"
+          icon={BarChart3}
+        />
+        <MoreRow
+          href="/settings"
+          label="Settings"
+          desc="Pay, allowances, holidays, appearance"
+          icon={Settings}
+        />
+      </Card>
+
+      <SignOutButton variant="row" />
+      <SignOutButton variant="row" scope="all" />
+
+      <p className="flex items-center justify-center gap-1.5 pt-2 text-xs text-muted-foreground">
+        <LogoGlyph className="h-4 w-4 text-primary" />
+        EWMS · Personal HR Notebook
+      </p>
     </div>
   );
 }

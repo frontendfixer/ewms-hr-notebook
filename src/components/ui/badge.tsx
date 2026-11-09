@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS } from "@/lib/design-tokens";
-import { CLAIM_STATUS_LABELS } from "@/lib/design-tokens";
+import { CLAIM_STATUS_LABELS, claimStatusVariant } from "@/lib/design-tokens";
 
 type StatusVariant = keyof typeof STATUS_COLORS;
 
@@ -28,13 +28,5 @@ export function Badge({
 
 export function claimStatusBadge(status: string) {
   const label = CLAIM_STATUS_LABELS[status] ?? status;
-  const variant: StatusVariant =
-    status === "PAID"
-      ? "success"
-      : status === "PASSED"
-        ? "info"
-        : status === "BILL_SUBMITTED"
-          ? "warning"
-          : "muted";
-  return <Badge variant={variant}>{label}</Badge>;
+  return <Badge variant={claimStatusVariant(status)}>{label}</Badge>;
 }

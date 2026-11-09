@@ -69,19 +69,8 @@ export const ledgerService = {
   },
 
   async getPendingMoney(userId: string): Promise<number> {
-    const settlements = await prisma.workEvent.findMany({
-      where: {
-        userId,
-        eventType: WorkEventType.MONTHLY_CLAIM_SETTLEMENT,
-        voidedAt: null,
-      },
-    });
-
-    let total = 0;
-    for (const settlement of settlements) {
-      const summary = await monthlyClaimService.getSettlementSummary(settlement.id);
-      total += summary.outstanding;
-    }
+    const views = await monthlyClaimService.listSettlementViews(userId);
+    let total = views.reduce((sum, v) => sum + v.outstanding, 0);
 
     const orphanClaims = await prisma.workEvent.findMany({
       where: {
@@ -102,6 +91,6 @@ export const ledgerService = {
       }
     }
 
-    return total;
+    return Math.round(total * 100) / 100;
   },
 };

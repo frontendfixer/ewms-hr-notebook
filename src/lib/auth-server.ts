@@ -6,8 +6,13 @@ import { prisma } from "@/lib/db";
 
 // Layouts and pages both check the session; cache() keeps it to one lookup per request.
 export const getSession = cache(async () => {
+  // Page loads only read the session. Renewing it (database expiry AND cookie)
+  // is the keep-alive route's job: a Server Component can't write the cookie, so
+  // refreshing here would move the database expiry without the cookie and leave
+  // the browser holding a cookie that dies on the old date.
   const session = await auth.api.getSession({
     headers: await headers(),
+    query: { disableRefresh: true },
   });
   return session;
 });

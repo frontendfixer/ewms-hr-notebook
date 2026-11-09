@@ -1,3 +1,4 @@
+import { cache } from "react";
 import {
   ClaimStatus,
   EventDomain,
@@ -57,6 +58,11 @@ const STATUS_EVENT_TYPES: WorkEventType[] = [
 ];
 
 export { getUserSetting } from "@/lib/user-settings";
+
+export type CrUsage = { appliedAt: Date; used: number };
+
+// Cards on /search and the claim page look usage up one by one; this lets them share a query per request.
+const crUsageForRequest = cache((userId: string) => eventService.getCrUsage(userId));
 
 export async function getCrExpiryDays(userId: string): Promise<number> {
   const val = await getUserSetting(
@@ -982,6 +988,8 @@ export const eventService = {
       limit?: number;
       cursor?: string;
       rootOnly?: boolean;
+      /** Restrict to these event types (wins over `rootOnly`). */
+      eventTypes?: WorkEventType[];
     } = {},
   ) {
     const where: Prisma.WorkEventWhereInput = {
@@ -1005,8 +1013,10 @@ export const eventService = {
             ],
           }
         : {}),
-      ...(options.rootOnly
-        ? {
+      ...(options.eventTypes
+        ? { eventType: { in: options.eventTypes } }
+        : options.rootOnly
+          ? {
             eventType: {
               in: [
                 WorkEventType.CR_CREDIT_ISSUED,
@@ -1016,27 +1026,23 @@ export const eventService = {
               ],
             },
           }
-        : {}),
+          : {}),
     };
 
-    const events = await prisma.workEvent.findMany({
+    return prisma.workEvent.findMany({
       where,
       orderBy: { occurredAt: "desc" },
       take: options.limit ?? 50,
       ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
-      include: {
-        childEvents: { where: { voidedAt: null } },
-        ledgerEntries: true,
-      },
     });
-
-    return events;
   },
 
-  async getCrLeaveAppliedDate(
-    userId: string,
-    crCreditEventId: string,
-  ): Promise<Date | null> {
+  /**
+   * For every CR credit that has been spent: the start of the first leave that
+   * used it and the total used (a half-day leave takes 0.5 of a 1-day credit).
+   * One query for the whole list, instead of one per credit card.
+   */
+  async getCrUsage(userId: string): Promise<Map<string, CrUsage>> {
     const consumedEvents = await prisma.workEvent.findMany({
       where: {
         userId,
@@ -1044,19 +1050,30 @@ export const eventService = {
         voidedAt: null,
       },
       include: { parentEvent: true },
+      orderBy: { occurredAt: "asc" },
     });
 
-    const match = consumedEvents.find((event) => {
-      const payload = event.payload as { crCreditEventId?: string };
-      return payload.crCreditEventId === crCreditEventId;
-    });
+    const usage = new Map<string, CrUsage>();
+    for (const event of consumedEvents) {
+      const { crCreditEventId, amount } = event.payload as {
+        crCreditEventId?: string;
+        amount?: number;
+      };
+      const leave = event.parentEvent;
+      if (!crCreditEventId || !leave || leave.voidedAt) continue;
+      const { startDate } = leave.payload as { startDate?: string };
+      const existing = usage.get(crCreditEventId);
+      usage.set(crCreditEventId, {
+        appliedAt:
+          existing?.appliedAt ?? (startDate ? new Date(startDate) : leave.occurredAt),
+        used: Math.round(((existing?.used ?? 0) + (amount ?? 1)) * 100) / 100,
+      });
+    }
+    return usage;
+  },
 
-    if (!match?.parentEvent || match.parentEvent.voidedAt) return null;
-
-    const leavePayload = match.parentEvent.payload as {
-      startDate?: string;
-    };
-    if (leavePayload.startDate) return new Date(leavePayload.startDate);
-    return match.parentEvent.occurredAt;
+  /** Same as `getCrUsage`, shared by every row rendered in one request. */
+  getCrUsageForRequest(userId: string): Promise<Map<string, CrUsage>> {
+    return crUsageForRequest(userId);
   },
 };

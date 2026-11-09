@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ClaimStatus } from "@/generated/prisma/client";
 import {
-  addToStatusBreakdown,
   aggregateChildStatuses,
-  aggregateDomainClaims,
-  emptyStatusBreakdown,
   getMonthKey,
   settlementCorrelationId,
   settlementTitle,
@@ -63,45 +60,5 @@ describe("monthly-claim-service helpers", () => {
         ClaimStatus.PASSED,
       ]),
     ).toBe(ClaimStatus.PASSED);
-  });
-});
-
-describe("claim stats aggregation", () => {
-  it("initializes empty status breakdown", () => {
-    const breakdown = emptyStatusBreakdown();
-    expect(breakdown.DRAFT).toEqual({ amount: 0, count: 0 });
-    expect(breakdown.PAID).toEqual({ amount: 0, count: 0 });
-  });
-
-  it("aggregates domain claims by type", () => {
-    const result = aggregateDomainClaims([
-      { eventType: "TRAVEL_RECORDED", amount: 438 },
-      { eventType: "TRAVEL_RECORDED", amount: 438 },
-      { eventType: "NIGHT_DUTY_RECORDED", amount: 148 },
-    ]);
-
-    expect(result.travel).toEqual({ amount: 876, count: 2 });
-    expect(result.nightDuty).toEqual({ amount: 148, count: 1 });
-    expect(result.totalEntries).toBe(3);
-  });
-
-  it("adds amounts to status breakdown", () => {
-    let breakdown = emptyStatusBreakdown();
-    breakdown = addToStatusBreakdown(breakdown, ClaimStatus.DRAFT, 500);
-    breakdown = addToStatusBreakdown(breakdown, ClaimStatus.PASSED, 300);
-    breakdown = addToStatusBreakdown(breakdown, ClaimStatus.PASSED, 200);
-
-    expect(breakdown.DRAFT).toEqual({ amount: 500, count: 1 });
-    expect(breakdown.PASSED).toEqual({ amount: 500, count: 2 });
-    expect(breakdown.PAID).toEqual({ amount: 0, count: 0 });
-  });
-
-  it("ignores voided status in breakdown", () => {
-    const breakdown = addToStatusBreakdown(
-      emptyStatusBreakdown(),
-      ClaimStatus.VOIDED,
-      100,
-    );
-    expect(breakdown.DRAFT).toEqual({ amount: 0, count: 0 });
   });
 });

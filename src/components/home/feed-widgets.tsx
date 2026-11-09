@@ -102,7 +102,7 @@ export function BalancePanel({
   pendingMoney: number;
 }) {
   const tiles = [
-    { label: "CR", value: crBalance, href: "/records/cr", domain: "CR" as const },
+    { label: "CR", value: crBalance, href: "/timeline?filter=CR", domain: "CR" as const },
     { label: "CL", value: clBalance, href: "/leaves", domain: "LEAVE" as const },
     { label: "LAP", value: lapBalance, href: "/leaves", domain: "LEAVE" as const },
     { label: "LHAP", value: lhapBalance, href: "/leaves", domain: "LEAVE" as const },

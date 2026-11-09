@@ -7,6 +7,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { toastResult } from "@/lib/action-toast";
+import { formatDate } from "@/lib/utils";
 import { Award, ChevronRight, Palmtree, Plus } from "lucide-react";
 
 type ManageLeavesViewProps = {
@@ -17,9 +18,11 @@ type ManageLeavesViewProps = {
     lhapBalance: number;
     leaveBalance: number;
   };
+  /** Credits still usable, soonest expiry first. */
+  crCredits: { creditEventId: string; balance: number; expiresAt: Date | null; earnedAt: Date | null }[];
 };
 
-export function ManageLeavesView({ balances }: ManageLeavesViewProps) {
+export function ManageLeavesView({ balances, crCredits }: ManageLeavesViewProps) {
   const router = useRouter();
 
   return (
@@ -161,12 +164,43 @@ export function ManageLeavesView({ balances }: ManageLeavesViewProps) {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Available CR credits</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {crCredits.length === 0 ? (
+            <p className="text-sm text-muted-foreground">None right now.</p>
+          ) : (
+            <ul className="divide-y divide-border/60">
+              {crCredits.map((c) => (
+                <li
+                  key={c.creditEventId}
+                  className="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0"
+                >
+                  <span>
+                    {Math.round(c.balance * 100) / 100} day
+                    {c.balance === 1 ? "" : "s"}
+                    {c.earnedAt && (
+                      <span className="text-muted-foreground"> · earned {formatDate(c.earnedAt)}</span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {c.expiresAt ? `expires ${formatDate(c.expiresAt)}` : "no expiry"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap gap-2 text-sm">
-        <Link href="/records/leave" className="text-primary hover:underline">
+        <Link href="/timeline?filter=LEAVE" className="text-primary hover:underline">
           View leave records
         </Link>
         <span className="text-muted-foreground">·</span>
-        <Link href="/records/cr" className="text-primary hover:underline">
+        <Link href="/timeline?filter=CR" className="text-primary hover:underline">
           View CR records
         </Link>
       </div>

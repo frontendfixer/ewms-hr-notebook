@@ -126,6 +126,15 @@ export const LEDGER_ACCOUNT_LABELS: Record<string, string> = {
   LEAVE_SPECIAL_CL: "Special CL",
 };
 
+/** Pill text is shorter than the full label: lists have little room beside the amount. */
+export const CLAIM_PILL_LABELS: Record<string, string> = {
+  DRAFT: "Unbilled",
+  BILL_SUBMITTED: "Billed",
+  PASSED: "Passed",
+  PAID: "Paid",
+  VOIDED: "Voided",
+};
+
 export const CLAIM_STATUS_LABELS: Record<string, string> = {
   DRAFT: "Not yet billed",
   BILL_SUBMITTED: "Bill Submitted",
@@ -133,3 +142,17 @@ export const CLAIM_STATUS_LABELS: Record<string, string> = {
   PAID: "Paid",
   VOIDED: "Voided",
 };
+
+/** Badge colour for a claim status; shared by the badge and timeline rows. */
+export function claimStatusVariant(status: string): keyof typeof STATUS_COLORS {
+  switch (status) {
+    case "PAID":
+      return "success";
+    case "PASSED":
+      return "info";
+    case "BILL_SUBMITTED":
+      return "warning";
+    default:
+      return "muted";
+  }
+}

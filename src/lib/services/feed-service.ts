@@ -173,6 +173,21 @@ export const feedService = {
     return items;
   },
 
+  /** Leave and CR balances only; the home page's full summary also totals money owed. */
+  async getLeaveBalances(userId: string) {
+    await leaveAccrualService.ensureAccruals(userId);
+    const [balances, crBalance] = await Promise.all([
+      ledgerService.getBalances(userId),
+      ledgerService.getCrBalance(userId),
+    ]);
+    return {
+      crBalance,
+      clBalance: balances.LEAVE_CL ?? 0,
+      lapBalance: balances.LEAVE_LAP ?? 0,
+      lhapBalance: balances.LEAVE_LHAP ?? 0,
+    };
+  },
+
   async getBalancesSummary(userId: string) {
     await leaveAccrualService.ensureAccruals(userId);
     const balances = await ledgerService.getBalances(userId);
