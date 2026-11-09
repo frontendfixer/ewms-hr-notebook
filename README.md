@@ -1,6 +1,18 @@
+<p align="center">
+  <img src="public/logo.png" alt="EWMS logo: a train on a blue tile" width="96" height="96" />
+</p>
+
 # EWMS — Personal HR Notebook
 
 Personal Indian Railways HR notebook with an event-first, ledger-first architecture. The UI speaks in actions ("Take Leave", "Add CR") rather than database terms.
+
+## Brand assets
+
+The logo is the train glyph in `src/components/brand/logo.tsx`. Favicons, the Apple touch icon, the PWA icons (including the maskable one) and `public/logo.*` are generated from it:
+
+```bash
+bash scripts/generate-brand-assets.sh   # needs rsvg-convert and ImageMagick
+```
 
 ## Stack
 
@@ -65,15 +77,16 @@ Business logic lives in `src/lib/services/`. Server actions are in `src/actions/
 | `/calendar` | Month view with domain-colored event dots |
 | `/timeline` | Chronological event cards with domain/period filters |
 | `/timeline/[eventId]` | Event detail, claim stepper, ledger impact, void |
-| `/claims` | Pending night-duty and travel claims (₹ total) |
-| `/records/[type]` | Filtered lists: `all`, `cr`, `leave`, `night`, `ta` |
-| `/reports` | Monthly NDA / TA / CR / leave statements, FY totals, print, CSV |
+| `/claims` | Monthly night-duty and travel bills: due-to-you overview, Open / Paid / All, bill status and payments |
+| `/claims/[settlementId]` | One monthly bill: claimed / received / due, payment history, status stepper, entries |
+| `/records/[type]` | Redirects to `/timeline` with the matching filter (old links) |
+| `/reports` | Monthly statement: summary with last-month comparison, NDA / TA / CR / leave rows, FY totals and chart, print, CSV |
 | `/reports/insights` | Personal insights (Sundays worked, avg night duty, top destination) |
 | `/search` | Full-text search on title/remarks (`?q=`) |
 | `/settings` | Theme, pay & allowance settings |
 | `/settings/holidays` | User-defined public holidays |
 | `/profile` | Name, personnel no., designation, department |
-| `/more` | Mobile hub for records, reports, settings, search |
+| `/more` | Mobile hub: profile, leaves, reports, settings, sign out |
 
 ### Add flows (FAB)
 

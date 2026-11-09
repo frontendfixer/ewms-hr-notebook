@@ -5,28 +5,43 @@ import { useTransition } from "react";
 import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { forgetSignedInUser } from "@/lib/session-hint";
 
 type SignOutButtonProps = {
   className?: string;
   fullWidth?: boolean;
   variant?: "button" | "row";
+  /** "all" ends every session of this account (a lost phone, a shared device). */
+  scope?: "device" | "all";
 };
 
 export function SignOutButton({
   className,
   fullWidth = false,
   variant = "button",
+  scope = "device",
 }: SignOutButtonProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   const handleSignOut = () => {
+    if (
+      scope === "all" &&
+      !confirm("Sign out of every device, including this one? You'll need to sign in again.")
+    ) {
+      return;
+    }
     startTransition(async () => {
+      if (scope === "all") await authClient.revokeSessions();
       await authClient.signOut({
         fetchOptions: {
-          onSuccess: () => router.push("/login"),
+          onSuccess: () => {
+            // Signing out on purpose: don't sign straight back in on the login page.
+            forgetSignedInUser();
+            router.push("/login?signedout=1");
+          },
         },
       });
     });
@@ -34,30 +49,23 @@ export function SignOutButton({
 
   if (variant === "row") {
     return (
-      <Card className="transition-shadow hover:shadow-sm">
-        <CardContent className="p-0">
-          <button
-            type="button"
-            onClick={handleSignOut}
-            disabled={pending}
-            className={cn(
-              "flex w-full items-center gap-3 p-4 text-left disabled:opacity-50",
-              className,
-            )}
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-              <LogOut className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-medium">
-                {pending ? "Signing out…" : "Sign out"}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                Sign out of your account on this device
-              </p>
-            </div>
-          </button>
-        </CardContent>
+      <Card className="overflow-hidden">
+        <button
+          type="button"
+          onClick={handleSignOut}
+          disabled={pending}
+          className={cn(
+            "flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-destructive/5 active:bg-destructive/10 disabled:opacity-50",
+            className,
+          )}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+            <LogOut className="h-[18px] w-[18px]" aria-hidden />
+          </span>
+          <span className="text-sm font-medium text-destructive">
+            {pending ? "Signing out…" : scope === "all" ? "Sign out of all devices" : "Sign out"}
+          </span>
+        </button>
       </Card>
     );
   }

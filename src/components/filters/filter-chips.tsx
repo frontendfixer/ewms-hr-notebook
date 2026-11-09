@@ -5,111 +5,110 @@ import { useSearchParams } from "next/navigation";
 import type { EventDomain } from "@/generated/prisma/client";
 import { cn } from "@/lib/utils";
 import { domainChipActiveClass } from "@/lib/domain-styles";
+import {
+  parseTimelineFilters,
+  timelineHref,
+  type TimelinePeriod,
+  type TimelineType,
+} from "@/lib/timeline-filters";
 
-const domainChips: Array<{
-  key: string;
+const typeChips: Array<{
+  type: TimelineType;
   label: string;
   domain?: EventDomain;
 }> = [
-  { key: "all", label: "All" },
-  { key: "CR", label: "CR", domain: "CR" as EventDomain },
-  { key: "LEAVE", label: "Leave", domain: "LEAVE" as EventDomain },
-  { key: "NIGHT_DUTY", label: "Night", domain: "NIGHT_DUTY" as EventDomain },
-  { key: "TRAVEL", label: "TA", domain: "TRAVEL" as EventDomain },
-  { key: "pending", label: "Pending" },
+  { type: "all", label: "All" },
+  { type: "CR", label: "CR", domain: "CR" },
+  { type: "LEAVE", label: "Leave", domain: "LEAVE" },
+  { type: "NIGHT_DUTY", label: "Night", domain: "NIGHT_DUTY" },
+  { type: "TRAVEL", label: "TA", domain: "TRAVEL" },
+  { type: "pending", label: "Pending" },
 ];
 
-const periodChips = [
-  { key: "month", label: "This Month" },
-  { key: "year", label: "This Year" },
-] as const;
+const periods: Array<{ period: TimelinePeriod; label: string }> = [
+  { period: "all", label: "All" },
+  { period: "month", label: "Month" },
+  { period: "year", label: "Year" },
+];
 
-function chipClass(active: boolean, domain?: EventDomain) {
-  const base =
-    "shrink-0 rounded-full border px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors";
-
-  if (!active) {
-    return cn(
-      base,
-      "border-border bg-card text-muted-foreground hover:bg-accent",
-    );
-  }
-
-  if (domain) {
-    return cn(base, domainChipActiveClass(domain));
-  }
-
-  return cn(base, "border-primary bg-primary/10 text-primary");
+function useTimelineFilters() {
+  const params = useSearchParams();
+  return parseTimelineFilters(
+    params.get("filter") ?? undefined,
+    params.get("period") ?? undefined,
+  );
 }
 
+/** Time range switch. Keeps the chosen entry type. */
 export function TimelinePeriodFilters({
   basePath = "/timeline",
 }: {
   basePath?: string;
 }) {
-  const searchParams = useSearchParams();
-  const filter = searchParams.get("filter");
-  const activePeriod =
-    filter === "month" || filter === "year" ? filter : null;
+  const filters = useTimelineFilters();
 
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
-      {periodChips.map(({ key, label }) => (
-        <Link
-          key={key}
-          href={
-            activePeriod === key ? basePath : `${basePath}?filter=${key}`
-          }
-          className={chipClass(activePeriod === key)}
-        >
-          {label}
-        </Link>
-      ))}
-    </div>
+    <nav
+      aria-label="Time range"
+      className="flex shrink-0 rounded-lg bg-muted p-0.5 text-xs font-medium"
+    >
+      {periods.map(({ period, label }) => {
+        const active = filters.period === period;
+        return (
+          <Link
+            key={period}
+            href={timelineHref({ ...filters, period }, undefined, basePath)}
+            aria-current={active ? "true" : undefined}
+            className={cn(
+              "flex min-h-8 min-w-12 items-center justify-center rounded-md px-3 transition-colors",
+              active
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
+/** Entry type chips. Keeps the chosen time range. */
 export function TimelineDomainChips({
   basePath = "/timeline",
 }: {
   basePath?: string;
 }) {
-  const searchParams = useSearchParams();
-  const filter = searchParams.get("filter") ?? "all";
-  const activePending = filter === "pending";
+  const filters = useTimelineFilters();
 
   return (
-    <div className="-mx-4 min-w-0 overflow-x-auto px-4 pb-2 scrollbar-none sm:mx-0 sm:px-0">
-      <div className="flex w-max flex-nowrap gap-2">
-        {domainChips.map(({ key, label, domain }) => {
-          const isPending = key === "pending";
-          const active = isPending
-            ? activePending
-            : filter === key &&
-              !activePending &&
-              filter !== "month" &&
-              filter !== "year";
-          const href =
-            key === "all"
-              ? basePath
-              : isPending
-                ? activePending
-                  ? basePath
-                  : `${basePath}?filter=pending`
-                : `${basePath}?filter=${key}`;
-
+    <nav
+      aria-label="Entry type"
+      className="-mx-4 min-w-0 overflow-x-auto px-4 scrollbar-none sm:mx-0 sm:px-0"
+    >
+      <div className="flex w-max flex-nowrap gap-1.5">
+        {typeChips.map(({ type, label, domain }) => {
+          const active = filters.type === type;
           return (
-            <Link key={key} href={href} className={chipClass(active, domain)}>
+            <Link
+              key={type}
+              href={timelineHref({ ...filters, type }, undefined, basePath)}
+              aria-current={active ? "true" : undefined}
+              className={cn(
+                "flex min-h-9 shrink-0 items-center rounded-full border px-3.5 text-xs font-medium whitespace-nowrap transition-colors",
+                active
+                  ? domain
+                    ? domainChipActiveClass(domain)
+                    : "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card text-muted-foreground hover:bg-accent",
+              )}
+            >
               {label}
             </Link>
           );
         })}
       </div>
-    </div>
+    </nav>
   );
-}
-
-/** @deprecated Use TimelineDomainChips and TimelinePeriodFilters */
-export function FilterChips({ basePath = "/timeline" }: { basePath?: string }) {
-  return <TimelineDomainChips basePath={basePath} />;
 }

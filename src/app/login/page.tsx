@@ -1,49 +1,26 @@
-"use client";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth-server";
+import { LoginPanel } from "@/components/auth/login-panel";
+import { loginErrorMessage } from "@/lib/login-errors";
 
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+export const metadata = { title: "Sign in" };
 
-// Better Auth sends failed or cancelled OAuth sign-ins back here with ?error=<code>.
-function SignInError() {
-  const error = useSearchParams().get("error");
-  if (!error) return null;
-  return (
-    <p role="alert" className="mb-3 text-sm text-destructive">
-      Sign-in didn&apos;t complete. Please try again.
-    </p>
-  );
-}
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string | string[]; signedout?: string }>;
+}) {
+  // Already signed in (say, opening the installed app): skip the login screen.
+  const session = await getSession();
+  if (session?.user) redirect("/");
 
-export default function LoginPage() {
-  const signIn = async () => {
-    await authClient.signIn.social({
-      provider: "google",
-      callbackURL: "/",
-      errorCallbackURL: "/login",
-    });
-  };
+  const params = await searchParams;
+  const error = Array.isArray(params.error) ? params.error[0] : params.error;
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">EWMS</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Your personal Indian Railways HR notebook
-          </p>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={null}>
-            <SignInError />
-          </Suspense>
-          <Button className="w-full" onClick={signIn}>
-            Continue with Google
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+    <LoginPanel
+      error={loginErrorMessage(error)}
+      signedOut={params.signedout === "1"}
+    />
   );
 }

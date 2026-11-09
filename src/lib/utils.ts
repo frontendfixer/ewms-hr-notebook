@@ -35,6 +35,31 @@ export function formatDate(date: Date | string): string {
   }).format(new Date(date));
 }
 
+export function formatMonthYear(date: Date | string): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    month: "long",
+    year: "numeric",
+    timeZone: APP_TIME_ZONE,
+  }).format(new Date(date));
+}
+
+/** Whole calendar days from `date` to `now`, in India time (0 = same day). */
+export function daysSince(date: Date | string, now: Date = new Date()): number {
+  const key = (d: Date | string) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIME_ZONE }).format(new Date(d));
+  return Math.round((Date.parse(key(now)) - Date.parse(key(date))) / 86_400_000);
+}
+
+/** "Sat, 7 Nov": the weekday matters when checking a duty or journey against a roster. */
+export function formatDayWithWeekday(date: Date | string): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: APP_TIME_ZONE,
+  }).format(new Date(date));
+}
+
 export function formatShortDate(date: Date | string): string {
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",

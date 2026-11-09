@@ -31,7 +31,7 @@ Personal Indian Railways HR notebook replacing a paper workbook. Event-first bac
 
 | Feature | Notes |
 |---------|-------|
-| Google OAuth auth | Better Auth, 7-day sessions |
+| Google OAuth auth | Better Auth, year-long sliding sessions |
 | Onboarding wizard | Profile + opening CL/LAP/LHAP balances via `LEAVE_LEDGER_ADJUSTMENT` |
 | Home feed | CR expiry reminders, pending claim alerts, upcoming holiday, recent activity |
 | Balance strip | CR credits, leave balances (CL/LAP/LHAP), pending ₹ |

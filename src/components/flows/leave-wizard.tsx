@@ -129,7 +129,7 @@ export function LeaveWizard({
           action={async (fd) => {
             const result = await recordLeave(fd);
             if (!toastResult(result, edit ? "Leave updated" : "Leave recorded")) return;
-            router.push(edit ? `/timeline/${result.data?.id}` : "/records/leave");
+            router.push(edit ? `/timeline/${result.data?.id}` : "/timeline?filter=LEAVE");
           }}
           className="space-y-4"
         >

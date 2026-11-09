@@ -77,27 +77,27 @@ export function StatusTimeline({
             <div className="flex flex-col items-center">
               <div
                 className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2",
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-medium",
                   done
                     ? "border-emerald-500 bg-emerald-500 text-white"
                     : "border-muted bg-muted text-muted-foreground",
                 )}
               >
-                {done ? <Check className="h-4 w-4" /> : idx + 1}
+                {done ? <Check className="h-3.5 w-3.5" /> : idx + 1}
               </div>
               {idx < steps.length - 1 && (
                 <div
                   className={cn(
-                    "w-0.5 flex-1 min-h-[24px]",
+                    "w-0.5 min-h-4 flex-1",
                     idx < currentIdx ? "bg-emerald-500" : "bg-muted",
                   )}
                 />
               )}
             </div>
-            <div className="min-w-0 flex-1 pb-6">
+            <div className="min-w-0 flex-1 pb-4">
               <p
                 className={cn(
-                  "font-medium",
+                  "text-sm font-medium leading-7",
                   done ? "text-foreground" : "text-muted-foreground",
                 )}
               >
@@ -160,7 +160,7 @@ export function StatusTimeline({
                       </div>
                     </>
                   )}
-                  <SubmitButton size="sm" disabled={pending}>
+                  <SubmitButton size="sm" disabled={pending} className="h-10 w-full sm:w-auto">
                     Mark {CLAIM_STATUS_LABELS[step]}
                   </SubmitButton>
                 </form>
@@ -174,6 +174,7 @@ export function StatusTimeline({
           type="button"
           variant="ghost"
           size="sm"
+          className="h-10"
           onClick={undo}
           disabled={pending}
         >

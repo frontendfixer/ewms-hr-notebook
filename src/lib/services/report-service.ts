@@ -7,7 +7,10 @@ import { LEAVE_TYPE_SHORT_LABELS } from "@/lib/leave-types";
 import type { LeaveType } from "@/generated/prisma/client";
 import { formatShortDate } from "@/lib/utils";
 
-export type ReportMonth = { year: number; month: number };
+import { financialYearOf, fyMonthSeries, parseReportMonth, reportMonthKey } from "@/lib/report-summary";
+import type { ReportMonth } from "@/lib/report-types";
+
+export type { ReportMonth };
 
 export type NdaRow = {
   date: Date;
@@ -66,29 +69,7 @@ export type MonthlyStatement = {
   balances: { cr: number; cl: number; lap: number; lhap: number };
 };
 
-/** Parse `yyyy-MM` (defaults to the current month). */
-export function parseReportMonth(value: string | undefined, now = new Date()): ReportMonth {
-  const match = value ? /^(\d{4})-(\d{2})$/.exec(value) : null;
-  if (match) {
-    const month = Number(match[2]);
-    if (month >= 1 && month <= 12) return { year: Number(match[1]), month };
-  }
-  return { year: now.getFullYear(), month: now.getMonth() + 1 };
-}
-
-export function reportMonthKey({ year, month }: ReportMonth): string {
-  return `${year}-${String(month).padStart(2, "0")}`;
-}
-
-/** Indian financial year (April–March) containing the given month. */
-export function financialYearOf({ year, month }: ReportMonth) {
-  const startYear = month >= 4 ? year : year - 1;
-  return {
-    label: `FY ${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`,
-    start: new Date(startYear, 3, 1),
-    end: new Date(startYear + 1, 2, 31, 23, 59, 59, 999),
-  };
-}
+export { parseReportMonth, reportMonthKey, financialYearOf };
 
 function monthRange({ year, month }: ReportMonth) {
   return {
@@ -237,15 +218,32 @@ export const reportService = {
       include: { ledgerEntries: true },
       orderBy: { occurredAt: "asc" },
     });
+    // One query for every credit's ledger entries, instead of one per credit.
+    const entries = credits.length
+      ? await prisma.ledgerEntry.findMany({
+          where: {
+            userId,
+            account: LedgerAccount.CR_CREDIT,
+            subAccountKey: { in: credits.map((c) => c.id) },
+          },
+          select: { subAccountKey: true, amount: true },
+        })
+      : [];
+    const balanceByCredit = new Map<string, number>();
+    for (const e of entries) {
+      if (!e.subAccountKey) continue;
+      balanceByCredit.set(
+        e.subAccountKey,
+        (balanceByCredit.get(e.subAccountKey) ?? 0) + Number(e.amount),
+      );
+    }
+
     const now = new Date();
     const rows: CrRow[] = [];
     for (const c of credits) {
-      const entries = await prisma.ledgerEntry.findMany({
-        where: { userId, account: LedgerAccount.CR_CREDIT, subAccountKey: c.id },
-      });
       const earnedEntry = c.ledgerEntries[0];
       const earned = Number(earnedEntry?.amount ?? 0);
-      const balance = round2(entries.reduce((s, e) => s + Number(e.amount), 0));
+      const balance = round2(balanceByCredit.get(c.id) ?? 0);
       const used = round2(earned - balance);
       const expiresAt = earnedEntry?.expiresAt ?? null;
       const expired = expiresAt != null && expiresAt <= now;
@@ -269,32 +267,77 @@ export const reportService = {
     return rows;
   },
 
-  /** NDA and TA totals for the financial year containing `m`. */
-  async getFinancialYearTotals(userId: string, m: ReportMonth) {
-    const fy = financialYearOf(m);
+  /** NDA + TA money for one month, without building the whole statement. */
+  async getMonthClaimTotal(userId: string, m: ReportMonth): Promise<number> {
+    const { start, end } = monthRange(m);
     const claims = await prisma.workEvent.findMany({
       where: {
         userId,
         voidedAt: null,
-        occurredAt: { gte: fy.start, lte: fy.end },
+        occurredAt: { gte: start, lte: end },
         eventType: { in: [WorkEventType.NIGHT_DUTY_RECORDED, WorkEventType.TRAVEL_RECORDED] },
       },
-      select: { eventType: true, payload: true },
+      select: { payload: true },
     });
+    return round2(
+      claims.reduce((sum, c) => sum + ((c.payload as { amount?: number }).amount ?? 0), 0),
+    );
+  },
+
+  /** Claims, leave and CR for the financial year containing `m`, with a per-month money series. */
+  async getFinancialYearTotals(userId: string, m: ReportMonth) {
+    const fy = financialYearOf(m);
+    const events = await prisma.workEvent.findMany({
+      where: {
+        userId,
+        voidedAt: null,
+        occurredAt: { gte: fy.start, lte: fy.end },
+        eventType: {
+          in: [
+            WorkEventType.NIGHT_DUTY_RECORDED,
+            WorkEventType.TRAVEL_RECORDED,
+            WorkEventType.LEAVE_RECORDED,
+            WorkEventType.CR_CREDIT_ISSUED,
+          ],
+        },
+      },
+      select: { eventType: true, payload: true, occurredAt: true },
+    });
+
+    const claimEntries: { occurredAt: Date; amount: number }[] = [];
     let nda = 0;
     let ta = 0;
     let nights = 0;
     let journeys = 0;
-    for (const c of claims) {
-      const amount = (c.payload as { amount?: number }).amount ?? 0;
-      if (c.eventType === WorkEventType.NIGHT_DUTY_RECORDED) {
-        nda += amount;
-        nights++;
+    let leaveDays = 0;
+    let crEarned = 0;
+    for (const e of events) {
+      const p = e.payload as { amount?: number; days?: number };
+      if (e.eventType === WorkEventType.LEAVE_RECORDED) {
+        leaveDays += p.days ?? 0;
+      } else if (e.eventType === WorkEventType.CR_CREDIT_ISSUED) {
+        crEarned += p.amount ?? 1;
       } else {
-        ta += amount;
-        journeys++;
+        const amount = p.amount ?? 0;
+        if (e.eventType === WorkEventType.NIGHT_DUTY_RECORDED) {
+          nda += amount;
+          nights++;
+        } else {
+          ta += amount;
+          journeys++;
+        }
+        claimEntries.push({ occurredAt: e.occurredAt, amount });
       }
     }
-    return { label: fy.label, nda: round2(nda), ta: round2(ta), nights, journeys };
+    return {
+      label: fy.label,
+      nda: round2(nda),
+      ta: round2(ta),
+      nights,
+      journeys,
+      leaveDays: round2(leaveDays),
+      crEarned: round2(crEarned),
+      months: fyMonthSeries(fy.start.getFullYear(), claimEntries),
+    };
   },
 };

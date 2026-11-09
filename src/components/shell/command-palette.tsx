@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -65,8 +66,11 @@ export function CommandPalette() {
         <kbd className="hidden rounded border px-1.5 text-xs sm:inline">⌘K</kbd>
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-[20vh] p-4">
+      {/* Portalled: the header's backdrop-blur would otherwise become the containing
+          block of this fixed overlay and trap it (and its z-index) inside the header. */}
+      {open &&
+        createPortal(
+        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/50 pt-[20vh] p-4">
           <div
             className={cn(
               "w-full max-w-lg rounded-2xl border border-border bg-card p-4 shadow-xl",
@@ -82,8 +86,9 @@ export function CommandPalette() {
               Type to search all your records
             </p>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </>
   );
 }

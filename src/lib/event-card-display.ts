@@ -84,15 +84,3 @@ export function formatEventCardDisplay(
       return { headline: title };
   }
 }
-
-/** @deprecated Use formatEventCardDisplay */
-export function formatEventCardHeadline(
-  domain: EventDomain,
-  title: string,
-  occurredAt: Date,
-  payload?: EventCardPayload,
-  eventType?: string,
-): string {
-  return formatEventCardDisplay(domain, title, occurredAt, payload, eventType)
-    .headline;
-}

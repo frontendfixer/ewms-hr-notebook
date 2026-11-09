@@ -1,10 +1,8 @@
 import type { EventDomain } from "@/generated/prisma/client";
-import { Card, CardContent } from "@/components/ui/card";
-import { claimStatusBadge } from "@/components/ui/badge";
-import { EventCardShell } from "@/components/timeline/event-card-shell";
+import { EventRow } from "@/components/timeline/event-row";
 import { claimStatusService } from "@/lib/services/claim-status-service";
-import { eventService } from "@/lib/services/event-service";
-import { formatEventCardDisplay } from "@/lib/event-card-display";
+import { eventService, type CrUsage } from "@/lib/services/event-service";
+import { summarizeEvent } from "@/lib/event-summary";
 import { requireUserId } from "@/lib/auth-server";
 import { editLockReason } from "@/lib/edit-rules";
 
@@ -15,8 +13,15 @@ type EventCardProps = {
   occurredAt: Date;
   payload: unknown;
   eventType: string;
+  remarks?: string | null;
+  /** Pass these when rendering a list, to skip the per-row lookups. */
+  claimStatus?: string | null;
+  crUsage?: CrUsage | null;
 };
 
+const CLAIM_TYPES = new Set(["NIGHT_DUTY_RECORDED", "TRAVEL_RECORDED"]);
+
+/** One entry as a row. Looks up its claim status / CR usage unless the caller supplied them. */
 export async function EventCard({
   id,
   title,
@@ -24,73 +29,34 @@ export async function EventCard({
   occurredAt,
   payload,
   eventType,
+  remarks,
+  claimStatus,
+  crUsage,
 }: EventCardProps) {
-  const p = payload as {
-    from?: string;
-    to?: string;
-    dayLabel?: string;
-    amount?: number;
-    expiresAt?: string;
-    currentStatus?: string;
-    purpose?: string;
-    days?: number;
-  };
-
-  let statusBadge = null;
-  let claimStatus: string | null = null;
-  if (
-    eventType === "NIGHT_DUTY_RECORDED" ||
-    eventType === "TRAVEL_RECORDED"
-  ) {
-    claimStatus = await claimStatusService.getStatus(id);
-    statusBadge = claimStatusBadge(claimStatus);
+  if (claimStatus === undefined) {
+    claimStatus = CLAIM_TYPES.has(eventType)
+      ? await claimStatusService.getStatus(id)
+      : null;
+  }
+  if (crUsage === undefined) {
+    crUsage =
+      eventType === "CR_CREDIT_ISSUED"
+        ? ((await eventService.getCrUsageForRequest(await requireUserId())).get(id) ?? null)
+        : null;
   }
 
-  let leaveAppliedAt: Date | null = null;
-  if (eventType === "CR_CREDIT_ISSUED") {
-    const userId = await requireUserId();
-    leaveAppliedAt = await eventService.getCrLeaveAppliedDate(userId, id);
-  }
-
-  const { headline, subtitle, details } = formatEventCardDisplay(
-    domain,
-    title,
-    occurredAt,
-    p,
-    eventType,
-    { leaveAppliedAt },
+  const summary = summarizeEvent(
+    { domain, eventType, title, occurredAt, remarks, payload },
+    { claimStatus, crUsage },
   );
-  const purpose =
-    domain === "TRAVEL" && p.purpose && p.purpose !== p.to ? p.purpose : undefined;
-  const showAmount =
-    domain === "NIGHT_DUTY" || domain === "TRAVEL" ? p.amount : undefined;
+  const editable =
+    editLockReason({
+      eventType,
+      claimStatus,
+      crUsedBy: crUsage ? "a leave" : null,
+    }) === null;
 
   return (
-    <EventCardShell
-      id={id}
-      domain={domain}
-      headline={headline}
-      subtitle={subtitle}
-      details={details}
-      isUsedCr={eventType === "CR_CREDIT_ISSUED" && leaveAppliedAt != null}
-      statusBadge={statusBadge}
-      amount={showAmount}
-      purpose={purpose}
-      editable={
-        editLockReason({
-          eventType,
-          claimStatus,
-          crUsedBy: leaveAppliedAt ? "a leave" : null,
-        }) === null
-      }
-    />
-  );
-}
-
-export function EventCardSkeleton() {
-  return (
-    <Card>
-      <CardContent className="h-20 animate-pulse bg-muted/50 p-4" />
-    </Card>
+    <EventRow id={id} domain={domain} summary={summary} editable={editable} />
   );
 }

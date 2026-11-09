@@ -106,7 +106,7 @@ export function TravelForm({
           action={async (fd) => {
             const result = await recordTravel(fd);
             if (!toastResult(result, edit ? "Travel updated" : "Travel recorded")) return;
-            router.push(edit ? `/timeline/${result.data?.id}` : "/records/ta");
+            router.push(edit ? `/timeline/${result.data?.id}` : "/timeline?filter=TRAVEL");
           }}
           className="space-y-4"
         >

@@ -58,7 +58,7 @@ export function AddCrForm({ holidays, expiryDays, edit }: AddCrFormProps) {
           action={async (fd) => {
             const result = await recordHolidayWork(fd);
             if (!toastResult(result, edit ? "CR updated" : "CR recorded")) return;
-            router.push(edit ? `/timeline/${result.data?.id}` : "/records/cr");
+            router.push(edit ? `/timeline/${result.data?.id}` : "/timeline?filter=CR");
           }}
           className="space-y-4"
         >

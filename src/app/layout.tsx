@@ -34,27 +34,18 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
       { url: "/favicon.ico", sizes: "any" },
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      {
-        url: "/favicon-16x16-light.png",
-        sizes: "16x16",
-        type: "image/png",
-        media: "(prefers-color-scheme: light)",
-      },
-      {
-        url: "/favicon-16x16-dark.png",
-        sizes: "16x16",
-        type: "image/png",
-        media: "(prefers-color-scheme: dark)",
-      },
     ],
     apple: "/apple-touch-icon.png",
   },
 };
 
 export const viewport: Viewport = {
+  // Lets env(safe-area-inset-*) report the notch / home bar so the dock and FAB can clear them.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#1d4ed8" },
     { media: "(prefers-color-scheme: dark)", color: "#3b82f6" },
